@@ -21,9 +21,9 @@ echo "working directory = "$SLURM_SUBMIT_DIR
 # sample process (list hostnames of the nodes you've requested)
 NPROCS=`srun --nodes=${SLURM_NNODES} bash -c 'hostname' |wc -l`
 echo NPROCS=$NPROCS
-
+echo $USER
 # can try the following to list out which GPU you have access to
-python /sailhome/mhelabd/scaling-kilns/kiln-scaling/notebooks/get_tiled_data_from_tiff_hdf5.py
+python /sailhome/${USER}/scaling-kilns/kiln-scaling/notebooks/get_tiled_data_from_tiff_hdf5.py $USER
 # python /sailhome/atlas/u/mliu356/scaling-kilns/kiln-scaling/notebooks/get_tiled_data_from_tiff_hdf5.py
 #srun /usr/local/cuda/samples/1_Utilities/deviceQuery/deviceQuery
 

@@ -20,13 +20,13 @@ echo NPROCS=$NPROCS
 
 now=$(date +"%y%m%d-%H%M")
 name=$("model-" + SLURM_JOBID) 
-logpath="/atlas/u/mhelabd/data/scaling-kilns/log"
+logpath="/atlas/u/${USER}/data/scaling-kilns/log"
 mkdir -p $logpath
 logfile="$logpath/${SLURM_JOBID}.out"
 
 echo "Writing to ${logfile}"
 # can try the following to list out which GPU you have access to
-python /sailhome/mhelabd/scaling-kilns/kiln-scaling/notebooks/CNN_model.py > ${logfile}
+python /sailhome/${USER}/scaling-kilns/kiln-scaling/notebooks/CNN_model.py > ${logfile}
 # python /sailhome/atlas/u/mliu356/scaling-kilns/kiln-scaling/notebooks/get_tiled_data_from_tiff_hdf5.py                                                                                                          #srun /usr/local/cuda/samples/1_Utilities/deviceQuery/deviceQuery
 
 # done                                                                                                                                                                                                             echo "Done"

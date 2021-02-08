@@ -6,6 +6,7 @@
 
 import os
 import json
+import sys
 import requests
 import time
 from requests.auth import HTTPBasicAuth
@@ -55,8 +56,8 @@ examples_per_save_file = 1000
 composite_file_name = 'bangladesh_all_bands_final'
 download_all_first = False
 
-save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
-composite_save_path = '/atlas/u/mhelabd/data/kiln-scaling/composites/'
+save_path = '/atlas/u/{}/data/kiln-scaling/tiles/'.format(sys.argv[0])
+composite_save_path = '/atlas/u/{}/data/kiln-scaling/composites/'.format(sys.argv[0])
 
 # save_path = '../data/tiles_hdf5/'
 # composite_save_path = '../data/composites/'
