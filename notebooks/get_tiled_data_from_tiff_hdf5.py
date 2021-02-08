@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[3]:
 
 
 import os
@@ -21,7 +21,7 @@ from os.path import isfile, join
 import h5py
 
 
-# In[2]:
+# In[8]:
 
 
 from pydrive.auth import GoogleAuth
@@ -45,15 +45,17 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[3]:
+# In[6]:
 
 
 # set params
 tile_height, tile_length = (64, 64)
 bands_to_read = None # ['B4', 'B3', 'B2'] # set to None to read all bands
 examples_per_save_file = 1000
-save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
 composite_file_name = 'bangladesh_all_bands_final'
+download_all_first = False
+
+save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
 composite_save_path = '/atlas/u/mhelabd/data/kiln-scaling/composites/'
 
 # save_path = '../data/tiles_hdf5/'
@@ -67,7 +69,7 @@ band_dict = dict(zip(all_bands, range(1, len(all_bands) + 1)))
 print(kilns.head())
 
 
-# In[4]:
+# In[7]:
 
 
 file_list = drive.ListFile({'q': "title contains '" + composite_file_name + "'"}).GetList()
@@ -77,7 +79,7 @@ for file in file_list[:5]:
   print('title: %s, id: %s' % (file['title'], file['id']))
 
 
-# In[5]:
+# In[8]:
 
 
 # calculate image grid
@@ -89,7 +91,7 @@ print("Number of image grid columns:", num_image_cols)
 print("Number of image grid rows:", num_image_rows)
 
 
-# In[6]:
+# In[9]:
 
 
 coords = []
@@ -108,28 +110,29 @@ for sublist in coords:
 bangladesh_geo = Polygon(flat_coords)
 
 
-# In[8]:
+# In[10]:
 
 
 # testing variables
 num_tiles_dropped = 0
 
 # optional pre-download all files
-for file in file_list:
-    start_time = time.time()
-    composite_file_path = composite_save_path + file['title']
-    if path.exists(composite_file_path):
-        print("File already downloaded.")
-    else:
-        print("Downloading file...")
-        # download the file
-        download_file = drive.CreateFile({'id': file['id']})
-        file.GetContentFile(composite_file_path)
-        print("Finished file in " + str(time.time() - start_time))
-print("Done downloading all files.")
+if download_all_first:
+    for file in file_list:
+        start_time = time.time()
+        composite_file_path = composite_save_path + file['title']
+        if path.exists(composite_file_path):
+            print("File already downloaded.")
+        else:
+            print("Downloading file...")
+            # download the file
+            download_file = drive.CreateFile({'id': file['id']})
+            file.GetContentFile(composite_file_path)
+            print("Finished file in " + str(time.time() - start_time))
+    print("Done downloading all files.")
 
 
-# In[9]:
+# In[ ]:
 
 
 def get_bands_and_bounds_from_file(file, band_names=None):
@@ -211,7 +214,7 @@ def get_kiln_tiles(bounds, num_rows, num_cols):
     return tiles
 
 
-# In[10]:
+# In[ ]:
 
 
 save_index, counter = 0, 0
@@ -221,7 +224,7 @@ examples = np.zeros([examples_per_save_file, len(all_bands) if bands_to_read is 
 labels = np.zeros([examples_per_save_file, 1])
 
 
-# In[11]:
+# In[ ]:
 
 
 # file_list = file_list[:1] # testing purposes
@@ -255,12 +258,12 @@ for index, file in enumerate(file_list):
         if index % num_image_cols == num_image_cols - 1: # rightmost column
             # calculate excess col pixels
             col_px_excess = ds_length % tile_length
-            bounds["right"] -= col_px_excess / ds_length * (ds.bounds.right - ds.bounds.left)
+            bounds["right"] -= col_px_excess / ds_length * (ds_bounds.right - ds_bounds.left)
 
         if index // num_image_cols == num_image_rows - 1: # last row
             # calculate excess row pixels
             row_px_excess = ds_height % tile_height
-            bounds["bottom"] += row_px_excess / ds_height * (ds.bounds.top - ds.bounds.bottom)
+            bounds["bottom"] += row_px_excess / ds_height * (ds_bounds.top - ds_bounds.bottom)
 
         kiln_tiles = get_kiln_tiles(bounds, num_rows, num_cols)
         print("Num tiles with kilns:", len(kiln_tiles))
@@ -285,7 +288,7 @@ for index, file in enumerate(file_list):
 print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - total_start_time))
 
 
-# In[17]:
+# In[ ]:
 
 
 # f = h5py.File('../data/tiles_hdf5/examples_0.hdf5','r')
