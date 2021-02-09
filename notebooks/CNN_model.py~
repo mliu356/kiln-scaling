@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[24]:
 
 
 import numpy as np
-import sys
 import keras.preprocessing.image 
 from keras.models import Sequential,Model,load_model
 from keras.preprocessing.image import img_to_array
 import tensorflow as tf
 from tensorflow.keras.applications.resnet50 import ResNet50, preprocess_input
 from keras.layers import Activation, Dropout, Flatten, Dense,  GlobalMaxPooling2D
+from keras import layers
 from keras.applications.imagenet_utils import decode_predictions
 import matplotlib.pyplot as plt
 from keras.layers import Input
@@ -23,47 +23,37 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.model_selection import train_test_split
 
 
-# In[17]:
+# In[25]:
 
 
 #Global Variables
-WANTED_BANDS = [1, 2, 3]
-IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, NUM_OG_BANDS = (64, 64, len(WANTED_BANDS), 13) 
+IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS = (64, 64, 13) 
 MODEL_NAME = "CNN-({})input-({}, {}, {})".format("Resnet50", IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS)
-PATH = "/atlas/u/{}/data/kiln-scaling/models/{}/".format(sys.argv[0], MODEL_NAME) 
+PATH = "/atlas/u/mhelabd/data/kiln-scaling/models/{}/".format(MODEL_NAME) 
 DATA_PATH = "/atlas/u/mhelabd/data/kiln-scaling/tiles/"
 MODEL_WEIGHTS_PATH = PATH + "weights/"
 MODEL_HISTORY_PATH = PATH + "history/"
 VERBOSE = True
-BALANCE_DATASET = True
-RANDOM_STATE = 42
 
 
-# In[22]:
+# In[ ]:
 
 
-def load_data_from_h5(preprocess=True, verbose=VERBOSE, balance_dataset=BALANCE_DATASET):
+def load_data_from_h5(preprocess=True, verbose=VERBOSE):
     X, y = [], []
     for i, filename in enumerate(os.listdir(DATA_PATH)):
         print("extracting: ",filename) 
         with h5py.File(DATA_PATH + filename, "r") as f:
             if i == 0:
-                X = np.array(f["images"]).reshape((-1, IMAGE_HEIGHT, IMAGE_WIDTH, NUM_OG_BANDS))[:, :, :, WANTED_BANDS]
+                X = np.array(f["images"]).reshape((-1, IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS))
                 y = np.array(f["labels"])
             else:
-                x_i = np.array(f["images"]).reshape((-1, IMAGE_HEIGHT, IMAGE_WIDTH, NUM_OG_BANDS))[:, :, :, WANTED_BANDS]
+                x_i = np.array(f["images"]).reshape((-1, IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS))
                 X = np.concatenate((X, x_i))
                 y_i = np.array(f["labels"])
                 y = np.concatenate((y, y_i))
-
-    if balance_dataset:
-        #since y = 1 is always less
-        n= y[y==1].shape[0]
-        mask = np.hstack([np.random.choice(np.where(y == l)[0], n, replace=False)
-                          for l in np.unique(y)])
-        X = X[mask]
-        y = y[mask]
-        
+        print(X.shape)
+        print(y.shape)
     if preprocess:
         X = preprocess_input(X)
 
@@ -71,6 +61,7 @@ def load_data_from_h5(preprocess=True, verbose=VERBOSE, balance_dataset=BALANCE_
         print("x shape: ", X.shape)
         print("y shape: ", y.shape)
     return X, y
+    
 
 
 # In[26]:
@@ -108,9 +99,9 @@ def load_data_from_csv(preprocess=True, verbose=VERBOSE):
 
 def split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2):
     assert train_percent + val_percent + test_percent == 1
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_percent, random_state=RANDOM_STATE)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_percent, random_state=42)
     updated_val_precent = val_percent/(1 - test_percent)
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=updated_val_precent, random_state=RANDOM_STATE)
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=updated_val_precent, random_state=42)
     return (X_train, X_val, X_test, y_train, y_val, y_test)
 
 
@@ -125,6 +116,7 @@ def make_model(weights="imagenet",
                metrics=[tf.keras.metrics.BinaryAccuracy(threshold=0.5)]):
     
     image_input = Input(shape=(IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS))
+    tf.
     base_model = ResNet50(include_top=include_top, weights=weights, input_tensor=image_input, classes=2)
     x = base_model.output
     x = GlobalMaxPooling2D()(x)
@@ -242,18 +234,15 @@ def evaluate_model(model, X_train, X_val, X_test, y_train, y_val, y_test, thresh
     
 
 
-# In[21]:
-
-
-X, y = load_data_from_h5()
-
-
 # In[48]:
 
-
-
+print("extracting data...")
+X, y = load_data_from_h5()
+print("Splitting data...")
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2)
+print("making model")
 model = make_model()
+print("training model")
 model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_1_epoch_40", epochs=40, save_history=False)
 
 
