@@ -4,7 +4,8 @@
 # In[203]:
 
 
-get_ipython().system('pip install geopy')
+# !pip install geopy
+# jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
 
 
 # In[248]:
@@ -58,8 +59,11 @@ examples_per_save_file = 1000
 composite_file_name = 'bangladesh_all_bands_final'
 download_all_first = False
 
-save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
-composite_save_path = '/atlas/u/mhelabd/data/kiln-scaling/composites/'
+# save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
+# composite_save_path = '/atlas/u/mhelabd/data/kiln-scaling/composites/'
+
+save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles/'
+composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
 
 # save_path = '../data/tiles_hdf5/'
 # composite_save_path = '../data/composites/'
@@ -240,7 +244,7 @@ labels = np.zeros([examples_per_save_file, 1])
 # In[233]:
 
 
-file_list = file_list[:1] # testing purposes
+# file_list = file_list[:1] # testing purposes
 
 total_start_time = time.time()
 for index, file in enumerate(file_list):
@@ -288,7 +292,6 @@ for index, file in enumerate(file_list):
                     print("index", (tile_idx_row, tile_idx_col))
                     print("bounds", pretty_bounds(data_bounds))
                     pos_examples += [data]
-                    pos_example_indices = 
 
     # handle leftovers in a final file
     if index == len(file_list) - 1:
