@@ -12,6 +12,7 @@
 
 
 import os
+import sys
 import json
 import time
 import pandas as pd
@@ -62,8 +63,8 @@ download_all_first = False
 # save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
 # composite_save_path = '/atlas/u/mhelabd/data/kiln-scaling/composites/'
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles/'
-composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
+save_path = '/atlas/u/{}/data/kiln-scaling/tiles/'.format(sys.argv[1])
+composite_save_path = '/atlas/u/{}/data/kiln-scaling/composites/'.format(sys.argv[1])
 
 # save_path = '../data/tiles_hdf5/'
 # composite_save_path = '../data/composites/'

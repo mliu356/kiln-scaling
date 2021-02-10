@@ -3,7 +3,7 @@
 
 # only use the following on partition with GPUs
 #SBATCH --gres=gpu:1
-
+#SBATCH --mem-per-cpu=32G
 #SBATCH --job-name="sample"
 #SBATCH --output=sample-%j.out
 
