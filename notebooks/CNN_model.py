@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[1]:
 
 
 import numpy as np
@@ -24,17 +24,16 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.model_selection import train_test_split
 
 
-# In[3]:
+# In[25]:
 
 
-# sys.argv[1] = "mhelabd"
+sys.argv[1] = "mhelabd"
 
 
-# In[4]:
+# In[26]:
 
 
 #Global Variables
-
 WANTED_BANDS = [3, 2, 1]
 IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, NUM_OG_BANDS = (64, 64, len(WANTED_BANDS), 13) 
 MODEL_NAME = "CNN-({})-input-({}, {}, {})-bands-({})".format("Resnet50", IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, str(WANTED_BANDS))
@@ -54,7 +53,7 @@ RANDOM_STATE = 42
 NUM_RANDOM_IMAGES = 5
 
 
-# In[27]:
+# In[4]:
 
 
 def mkdirs(names):
@@ -64,7 +63,7 @@ def mkdirs(names):
 mkdirs([MODEL_WEIGHTS_PATH, MODEL_HISTORY_PATH, MODEL_EVALUATION_PATH, MODEL_EVALUATION_IMAGE_PATH])
 
 
-# In[37]:
+# In[5]:
 
 
 def save_h5_file(X, y, bounds):
@@ -107,13 +106,13 @@ def balance_and_save_h5_data(preprocess=False, verbose=VERBOSE):
     save_h5_file(X, y, bounds)
 
 
-# In[9]:
+# In[6]:
 
 
 # balance_and_save_h5_data()
 
 
-# In[10]:
+# In[7]:
 
 
 def load_data_from_h5(preprocess=PREPROCESS, verbose=VERBOSE,                       balance_dataset=BALANCE_DATASET, use_balanced_dataset=USE_BALANCED_DATASET):
@@ -153,7 +152,7 @@ def load_data_from_h5(preprocess=PREPROCESS, verbose=VERBOSE,                   
     return X, y, bounds
 
 
-# In[11]:
+# In[8]:
 
 
 def load_data_from_csv(preprocess=True, verbose=VERBOSE):
@@ -183,7 +182,7 @@ def load_data_from_csv(preprocess=True, verbose=VERBOSE):
     
 
 
-# In[12]:
+# In[9]:
 
 
 def split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2):
@@ -194,7 +193,7 @@ def split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2):
     return (X_train, X_val, X_test, y_train, y_val, y_test)
 
 
-# In[13]:
+# In[10]:
 
 
 def make_model(weights="imagenet", 
@@ -220,7 +219,7 @@ def make_model(weights="imagenet",
     return model
 
 
-# In[14]:
+# In[15]:
 
 
 def train_model(model, 
@@ -238,14 +237,14 @@ def train_model(model,
     callbacks = []
     
     if early_stopping:
-        early_stop = EarlyStopping(monitor='loss', min_delta=0.001, patience=3, mode='min', verbose=1)
+        early_stop = EarlyStopping(monitor='loss', min_delta=0.0001, patience=3, mode='min', verbose=1)
         callbacks.append(early_stop)
     checkpoint_file = MODEL_WEIGHTS_PATH + "{}.h5".format(trial_name)
     checkpoint = ModelCheckpoint(checkpoint_file, 
                                   save_weights_only=True,
                                   monitor='val_accuracy',
                                   mode='max',
-                                  save_best=True)
+                                  save_best_only=False)
     callbacks.append(checkpoint)                        
     
     history = model.fit(x=X_train,
@@ -261,7 +260,7 @@ def train_model(model,
     return model, history
 
 
-# In[15]:
+# In[12]:
 
 
 def graph_model_performance(history):
@@ -286,7 +285,7 @@ def graph_model_performance(history):
     plt.savefig(MODEL_EVALUATION_PATH + "loss.png")
 
 
-# In[24]:
+# In[28]:
 
 
 def print_images(x, name):
@@ -294,12 +293,14 @@ def print_images(x, name):
     plt.imshow(normalized_x)
     plt.show()
     plt.savefig(MODEL_EVALUATION_IMAGE_PATH + name)
-def evaluate_dataset(model, X, y, threshold=0.5, pictures=True):
+def evaluate_dataset(model, X, y, threshold=0.5, pictures=True, dataset_type="test"):
     # Evaluate the model on the test data using `evaluate`
     results = model.evaluate(X, y, batch_size=128)
     print(dict(zip(model.metrics_names, results)))
+
     y_pred = model.predict(X) > threshold
     print(tf.math.confusion_matrix(y.reshape(-1), y_pred.reshape(-1)))
+    
     if pictures:
         print("Generating {} false positives and {} false negatives...".format(NUM_RANDOM_IMAGES, NUM_RANDOM_IMAGES))
 
@@ -317,33 +318,29 @@ def evaluate_dataset(model, X, y, threshold=0.5, pictures=True):
         if len(X_fp) > 0:
             randi = np.random.randint(0, len(X_fp))
             X_fp_i = false_positives_index[randi][0]
-            print_images(X_fp[randi], "fp_example_{}_coordinates({}).png".format(X_fp_i, str(bounds[X_fp_i])))
+            confidence = model.predict(np.expand_dims(X[X_fp_i], axis=0))[0][0]
+            print_images(X_fp[randi], "{}_fp_example{}_confidence_{}_coordinates({}).png"                         .format(dataset_type, X_fp_i, confidence, str(bounds[X_fp_i])))
         if len(X_fn) > 0:
             randi = np.random.randint(0, len(X_fn))
             X_fn_i = false_negatives_index[randi][0]
-            print_images(X_fn[randi],  "fn_example_{}_coordinates({}).png".format(X_fn_i, str(bounds[X_fn_i])))
+            confidence = model.predict(np.expand_dims(X[X_fn_i], axis=0))[0][0]
+            print_images(X_fn[randi],  "{}_fn_example{}_confidence_{}_coordinates({}).png"                         .format(dataset_type, X_fn_i, confidence, str(bounds[X_fn_i])))
 
 def evaluate_model(model, X_train, X_val, X_test, y_train, y_val, y_test, threshold=0.5, pictures=True):
     print("Evaluating Training data: ")
-    evaluate_dataset(model, X_train, y_train, threshold=threshold, pictures=pictures)
+    evaluate_dataset(model, X_train, y_train, threshold=threshold, pictures=pictures, dataset_type="train")
 
     print("Evaluating Validation data: ")
-    evaluate_dataset(model, X_val, y_val, threshold=threshold, pictures=pictures)
+    evaluate_dataset(model, X_val, y_val, threshold=threshold, pictures=pictures, dataset_type="val")
 
     print("Evaluating Test data: ")
-    evaluate_dataset(model, X_test, y_test, threshold=threshold, pictures=pictures)
+    evaluate_dataset(model, X_test, y_test, threshold=threshold, pictures=pictures, dataset_type="test")
 
 
-# In[17]:
+# In[14]:
 
 
 X, y, bounds = load_data_from_h5()
-
-
-# In[21]:
-
-
-PATH
 
 
 # In[18]:
@@ -351,10 +348,10 @@ PATH
 
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2)
 model = make_model()
-model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_3_epoch_40", epochs=40, save_history=True)
+model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_4_epoch_35", epochs=35, save_history=True)
 
 
-# In[22]:
+# In[19]:
 
 
 graph_model_performance(history.history)
@@ -366,10 +363,10 @@ graph_model_performance(history.history)
 evaluate_model(model, X_train, X_val, X_test, y_train, y_val, y_test)
 
 
-# In[65]:
+# In[24]:
 
 
-
+MODEL_EVALUATION_IMAGE_PATH
 
 
 # In[ ]:
