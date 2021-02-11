@@ -1,9 +1,9 @@
 #!/bin/bash                                                                                                                                                                                                                                                                              #SBATCH --partition=tibet --qos=normal                                                                                                                                                                                                                                                   #SBATCH --time=06:00:00                                                                                                                                                                                                                                                                  #SBATCH --nodes=4                                                                                                                                                                                                                                                                        #SBATCH --cpus-per-task=2      
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 
 # only use the following on partition with GPUs
 #SBATCH --gres=gpu:1
-#SBATCH --mem-per-cpu=32G
+#SBATCH --mem-per-cpu=64G
 #SBATCH --job-name="sample"
 #SBATCH --output=sample-%j.out
 

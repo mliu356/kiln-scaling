@@ -12,7 +12,6 @@
 
 
 import os
-import sys
 import json
 import time
 import pandas as pd
@@ -58,13 +57,13 @@ drive = GoogleDrive(gauth)
 tile_height, tile_length = (64, 64)
 examples_per_save_file = 1000
 composite_file_name = 'bangladesh_all_bands_final'
-download_all_first = False
+download_all_first = True
 
 # save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
 # composite_save_path = '/atlas/u/mhelabd/data/kiln-scaling/composites/'
 
-save_path = '/atlas/u/{}/data/kiln-scaling/tiles/'.format(sys.argv[1])
-composite_save_path = '/atlas/u/{}/data/kiln-scaling/composites/'.format(sys.argv[1])
+save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles/'
+composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
 
 # save_path = '../data/tiles_hdf5/'
 # composite_save_path = '../data/composites/'
@@ -127,7 +126,7 @@ if download_all_first:
         start_time = time.time()
         composite_file_path = composite_save_path + file['title']
         if path.exists(composite_file_path):
-            print("File already downloaded.")
+            print("File already downloaded.", composite_file_path)
         else:
             print("Downloading file...")
             # download the file
@@ -233,7 +232,7 @@ def pretty_bounds(bounds):
 
 ## testing variables
 num_tiles_dropped = 0
-pos_examples = []
+# pos_examples = []
 
 save_index, counter = 0, 0
 
@@ -289,10 +288,10 @@ for index, file in enumerate(file_list):
             data, data_bounds = get_data_and_bounds_given_pixels(ds_bounds, bands, px_row, px_col, tile_has_kiln)
             if data is not None:
                 save_index, counter = add_example(data, data_bounds, save_index, counter, tile_has_kiln)
-                if tile_has_kiln:
-                    print("index", (tile_idx_row, tile_idx_col))
-                    print("bounds", pretty_bounds(data_bounds))
-                    pos_examples += [data]
+#                 if tile_has_kiln:
+#                     print("index", (tile_idx_row, tile_idx_col))
+#                     print("bounds", pretty_bounds(data_bounds))
+#                     pos_examples += [data]
 
     # handle leftovers in a final file
     if index == len(file_list) - 1:
@@ -310,7 +309,7 @@ print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - tota
 # In[244]:
 
 
-visualize_tile(pos_examples[10])
+# visualize_tile(pos_examples[10])
 # visualize_tile(examples[1])
 # visualize_tile(examples[2])
 
@@ -318,30 +317,32 @@ visualize_tile(pos_examples[10])
 # In[304]:
 
 
-WANTED_BANDS = [3, 2, 1]
+# WANTED_BANDS = [3, 2, 1]
 
-for i in range(5):
-    with h5py.File(save_path + "examples_" + str(i) + ".hdf5", "r") as f:
-        if i == 0:
-            X = np.array(f["images"][()])                .reshape((-1, len(all_bands), 64, 64))
-            X = np.moveaxis(X, 1, -1)[:, :, :, WANTED_BANDS]
-            y = np.array(f["labels"][()])
-        else:
-            x_i = np.array(f["images"][()])                .reshape((-1, len(all_bands), 64, 64))
-            x_i = np.moveaxis(x_i, 1, -1)[:, :, :, WANTED_BANDS]
-            X = np.concatenate((X, x_i))
-            y_i = np.array(f["labels"][()])
-            y = np.concatenate((y, y_i))
+# for i in range(5):
+#     with h5py.File(save_path + "examples_" + str(i) + ".hdf5", "r") as f:
+#         if i == 0:
+#             X = np.array(f["images"][()])\
+#                 .reshape((-1, len(all_bands), 64, 64))
+#             X = np.moveaxis(X, 1, -1)[:, :, :, WANTED_BANDS]
+#             y = np.array(f["labels"][()])
+#         else:
+#             x_i = np.array(f["images"][()])\
+#                 .reshape((-1, len(all_bands), 64, 64))
+#             x_i = np.moveaxis(x_i, 1, -1)[:, :, :, WANTED_BANDS]
+#             X = np.concatenate((X, x_i))
+#             y_i = np.array(f["labels"][()])
+#             y = np.concatenate((y, y_i))
 
 
 # In[315]:
 
 
-print("Examples w/ kilns:", np.where(y==1.0)[0])
-index = 4321
-print("label:", y[index])
-vis_X = X[index]
-vis_X *= 1 / np.max(vis_X)
-print(vis_X.shape)
-plt.imshow(vis_X)
+# print("Examples w/ kilns:", np.where(y==1.0)[0])
+# index = 4321
+# print("label:", y[index])
+# vis_X = X[index]
+# vis_X *= 1 / np.max(vis_X)
+# print(vis_X.shape)
+# plt.imshow(vis_X)
 
