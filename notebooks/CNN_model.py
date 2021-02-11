@@ -30,8 +30,8 @@ from sklearn.model_selection import train_test_split
 WANTED_BANDS = [1, 2, 3]
 IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, NUM_OG_BANDS = (64, 64, len(WANTED_BANDS), 13) 
 MODEL_NAME = "CNN-({})input-({}, {}, {})".format("Resnet50", IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS)
-PATH = "/atlas/u/{}/data/kiln-scaling/models/{}/".format(sys.argv[0], MODEL_NAME) 
-DATA_PATH = "/atlas/u/mhelabd/data/kiln-scaling/tiles/"
+PATH = "/atlas/u/{}/data/kiln-scaling/models/{}/".format(sys.argv[1], MODEL_NAME) 
+DATA_PATH = "/atlas/u/mliu356/data/kiln-scaling/tiles/"
 MODEL_WEIGHTS_PATH = PATH + "weights/"
 MODEL_HISTORY_PATH = PATH + "history/"
 VERBOSE = True
