@@ -5,6 +5,7 @@
 
 
 import numpy as np
+import pickle
 import sys
 import keras.preprocessing.image 
 from keras.models import Sequential,Model,load_model
@@ -23,57 +24,135 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.model_selection import train_test_split
 
 
-# In[17]:
+# In[3]:
+
+
+# sys.argv[1] = "mhelabd"
+
+
+# In[4]:
 
 
 #Global Variables
-WANTED_BANDS = [1, 2, 3]
+WANTED_BANDS = [12, 11, 1]
 IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, NUM_OG_BANDS = (64, 64, len(WANTED_BANDS), 13) 
-MODEL_NAME = "CNN-({})input-({}, {}, {})".format("Resnet50", IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS)
+MODEL_NAME = "CNN-({})-input-({}, {}, {})-bands-({})".format("Resnet50", IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, str(WANTED_BANDS))
 PATH = "/atlas/u/{}/data/kiln-scaling/models/{}/".format(sys.argv[1], MODEL_NAME) 
 DATA_PATH = "/atlas/u/mliu356/data/kiln-scaling/tiles/"
 MODEL_WEIGHTS_PATH = PATH + "weights/"
 MODEL_HISTORY_PATH = PATH + "history/"
+MODEL_EVALUATION_PATH = PATH + "evaluation/"
+MODEL_EVALUATION_IMAGE_PATH = MODEL_EVALUATION_PATH + "images/"
 VERBOSE = True
 BALANCE_DATASET = True
+USE_BALANCED_DATASET = True
+PREPROCESS = False
+# BALANCED_DATA_PATH = "/atlas/u/{}/data/kiln-scaling/balanced_tiles/".format(sys.argv[1])
+BALANCED_DATA_PATH = "/atlas/u/mhelabd/data/kiln-scaling/balanced_tiles/"
 RANDOM_STATE = 42
+NUM_RANDOM_IMAGES = 5
 
 
-# In[22]:
+# In[27]:
 
 
-def load_data_from_h5(preprocess=True, verbose=VERBOSE, balance_dataset=BALANCE_DATASET):
+def mkdirs(names):
+    for name in names:
+        if not os.path.exists(name):
+            os.makedirs(name)
+mkdirs([MODEL_WEIGHTS_PATH, MODEL_HISTORY_PATH, MODEL_EVALUATION_PATH, MODEL_EVALUATION_IMAGE_PATH])
+
+
+# In[37]:
+
+
+def save_h5_file(X, y, bounds):
+    filename = BALANCED_DATA_PATH + ("preprocessed_" if PREPROCESS else "") + "all_examples.hdf5"
+    print("Saving file", filename)
+    f = h5py.File(filename, 'w')
+    bounds_dset = f.create_dataset("bounds", data=bounds)
+    examples_dset = f.create_dataset("images", data=X)
+    labels_dset = f.create_dataset("labels", data=y)
+    f.close()
+
+def balance_and_save_h5_data(preprocess=False, verbose=VERBOSE):
     X, y = [], []
+    print("processing files...")
     for i, filename in enumerate(os.listdir(DATA_PATH)):
-        print("extracting: ",filename) 
+        print(".", end="")
         with h5py.File(DATA_PATH + filename, "r") as f:
             if i == 0:
-                X = np.array(f["images"]).reshape((-1, IMAGE_HEIGHT, IMAGE_WIDTH, NUM_OG_BANDS))[:, :, :, WANTED_BANDS]
-                y = np.array(f["labels"])
+                X = np.array(f["images"][()])                    .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
+                y = np.array(f["labels"][()])
+                bounds = np.array(f["bounds"][()])
             else:
-                x_i = np.array(f["images"]).reshape((-1, IMAGE_HEIGHT, IMAGE_WIDTH, NUM_OG_BANDS))[:, :, :, WANTED_BANDS]
+                x_i = np.array(f["images"][()])                    .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
                 X = np.concatenate((X, x_i))
-                y_i = np.array(f["labels"])
+
+                y_i = np.array(f["labels"][()])
                 y = np.concatenate((y, y_i))
 
-    if balance_dataset:
-        #since y = 1 is always less
-        n= y[y==1].shape[0]
-        mask = np.hstack([np.random.choice(np.where(y == l)[0], n, replace=False)
-                          for l in np.unique(y)])
-        X = X[mask]
-        y = y[mask]
-        
-    if preprocess:
-        X = preprocess_input(X)
+                bounds_i = np.array(f["bounds"][()])
+                bounds = np.concatenate((bounds, bounds_i))
 
+            n= y[y==1].shape[0]
+            mask = np.hstack([np.random.choice(np.where(y == l)[0], n, replace=False) for l in np.unique(y)])
+            X = X[mask]
+            y = y[mask]
+            bounds = bounds[mask]
+    print("X.shape: ", X.shape)
+    print("y.shape: ", y.shape)
+    print("bounds.shape: ", bounds.shape)
+    save_h5_file(X, y, bounds)
+
+
+# In[9]:
+
+
+# balance_and_save_h5_data()
+
+
+# In[10]:
+
+
+def load_data_from_h5(preprocess=PREPROCESS, verbose=VERBOSE,                       balance_dataset=BALANCE_DATASET, use_balanced_dataset=USE_BALANCED_DATASET):
+    X, y = [], []
+    data_path = BALANCED_DATA_PATH if use_balanced_dataset else DATA_PATH
+    for i, filename in enumerate(os.listdir(data_path)):
+        print("extracting: ",filename) 
+        with h5py.File(data_path + filename, "r") as f:
+            if i == 0:
+                X = np.array(f["images"][()])                    .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
+                X = np.moveaxis(X, 1, -1)[:, :, :, WANTED_BANDS]
+                y = np.array(f["labels"][()])
+                bounds = np.array(f["bounds"][()])
+            else:
+                x_i = np.array(f["images"][()])                    .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
+                x_i = np.moveaxis(x_i, 1, -1)[:, :, :, WANTED_BANDS]
+                X = np.concatenate((X, x_i))
+                y_i = np.array(f["labels"][()])
+                y = np.concatenate((y, y_i))
+                
+                bounds_i = np.array(f["bounds"][()])
+                bounds = np.concatenate((bounds, bounds_i))
+        if preprocess:
+            X = preprocess_input(X)  
+        if balance_dataset:
+            #since y = 1 is always less
+            n= y[y==1].shape[0]
+            mask = np.hstack([np.random.choice(np.where(y == l)[0], n, replace=False)
+                              for l in np.unique(y)])
+            X = X[mask]
+            y = y[mask]
+            bounds = bounds[mask]
+        
     if verbose:
         print("x shape: ", X.shape)
         print("y shape: ", y.shape)
-    return X, y
+    return X, y, bounds
 
 
-# In[26]:
+# In[11]:
 
 
 def load_data_from_csv(preprocess=True, verbose=VERBOSE):
@@ -103,7 +182,7 @@ def load_data_from_csv(preprocess=True, verbose=VERBOSE):
     
 
 
-# In[28]:
+# In[12]:
 
 
 def split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2):
@@ -114,7 +193,7 @@ def split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2):
     return (X_train, X_val, X_test, y_train, y_val, y_test)
 
 
-# In[29]:
+# In[13]:
 
 
 def make_model(weights="imagenet", 
@@ -140,7 +219,7 @@ def make_model(weights="imagenet",
     return model
 
 
-# In[47]:
+# In[14]:
 
 
 def train_model(model, 
@@ -165,7 +244,7 @@ def train_model(model,
                                   save_weights_only=True,
                                   monitor='val_accuracy',
                                   mode='max',
-                                  save_best_only=True)
+                                  save_best_only=False)
     callbacks.append(checkpoint)                        
     
     history = model.fit(x=X_train,
@@ -181,90 +260,119 @@ def train_model(model,
     return model, history
 
 
-# In[52]:
+# In[15]:
 
 
 def graph_model_performance(history):
-  # IF METRICS ARE UPDATED, YOU MUST UPDATE THIS
-  # summarize history for accuracy
-  plt.plot(list(history['binary_accuracy']))
-  plt.plot(list(history['val_binary_accuracy']))
-  plt.title('model accuracy')
-  plt.ylabel('accuracy')
-  plt.xlabel('epoch')
-  plt.legend(['train', 'validation'], loc='upper left')
-  plt.show()
-  # summarize history for loss
-  plt.plot(list(history['loss']))
-  plt.plot(list(history['val_loss']))
-  plt.title('model loss')
-  plt.ylabel('loss')
-  plt.xlabel('epoch')
-  plt.legend(['train', 'validation'], loc='upper left')
-  plt.show()
+    # IF METRICS ARE UPDATED, YOU MUST UPDATE THIS
+    # summarize history for accuracy
+    plt.plot(list(history['binary_accuracy']))
+    plt.plot(list(history['val_binary_accuracy']))
+    plt.title('model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'validation'], loc='upper left')
+    plt.show()
+    plt.savefig(MODEL_EVALUATION_PATH + "accuracy.png")
+    # summarize history for loss
+    plt.plot(list(history['loss']))
+    plt.plot(list(history['val_loss']))
+    plt.title('model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'validation'], loc='upper left')
+    plt.show()
+    plt.savefig(MODEL_EVALUATION_PATH + "loss.png")
 
 
-# In[74]:
+# In[24]:
 
 
-def print_images(x):
-  normalized_x = x/np.max(x)
-  plt.imshow(normalized_x)
-  plt.show()
+def print_images(x, name):
+    normalized_x = x/np.max(x)
+    plt.imshow(normalized_x)
+    plt.show()
+    plt.savefig(MODEL_EVALUATION_IMAGE_PATH + name)
 def evaluate_dataset(model, X, y, threshold=0.5, pictures=True):
-  # Evaluate the model on the test data using `evaluate`
-  results = model.evaluate(X, y, batch_size=128)
-  print(dict(zip(model.metrics_names, results)))
-  y_pred = model.predict(X) > threshold
-  print(tf.math.confusion_matrix(y.reshape(-1), y_pred.reshape(-1)))
-  if pictures:
-    print("Generating three false positives...")
-    false_positives = np.logical_and(y != y_pred, y_pred == 1)
-    X_fp = X[false_positives.reshape(-1), :, :]
-    for i in range(3):
-      randi = np.random.randint(0, len(X_fp))
-      print_images(X_fp[randi])
-    print("Generating three false negatives...")
-    false_negatives = np.logical_and(y != y_pred, y_pred == 0)
-    X_fn = X[false_negatives.reshape(-1), :, :]
-    for i in range(3):
-      randi = np.random.randint(0, len(X_fp))
-      print_images(X_fn[randi])
-def evaluate_model(model, X_train, X_val, X_test, y_train, y_val, y_test, threshold=0.5, pictures=True):
-  print("Evaluating Training data: ")
-  evaluate_dataset(model, X_train, y_train, threshold=threshold, pictures=pictures)
-  
-  print("Evaluating Validation data: ")
-  evaluate_dataset(model, X_val, y_val, threshold=threshold, pictures=pictures)
+    # Evaluate the model on the test data using `evaluate`
+    results = model.evaluate(X, y, batch_size=128)
+    print(dict(zip(model.metrics_names, results)))
+    y_pred = model.predict(X) > threshold
+    print(tf.math.confusion_matrix(y.reshape(-1), y_pred.reshape(-1)))
+    if pictures:
+        print("Generating {} false positives and {} false negatives...".format(NUM_RANDOM_IMAGES, NUM_RANDOM_IMAGES))
 
-  print("Evaluating Training data: ")
-  evaluate_dataset(model, X_test, y_test, threshold=threshold, pictures=pictures)
-    
+        false_positives = np.logical_and(y != y_pred, y_pred == 1)
+        X_fp = X[false_positives.reshape(-1), :, :]
+        #gets you the location of every false positive in X
+        false_positives_index = np.argwhere(false_positives)
+
+        false_negatives = np.logical_and(y != y_pred, y_pred == 0)
+        X_fn = X[false_negatives.reshape(-1), :, :]
+        false_negatives_index = np.argwhere(false_negatives)
+
+        
+    for i in range(NUM_RANDOM_IMAGES):
+        if len(X_fp) > 0:
+            randi = np.random.randint(0, len(X_fp))
+            X_fp_i = false_positives_index[randi][0]
+            print_images(X_fp[randi], "fp_example_{}_coordinates({}).png".format(X_fp_i, str(bounds[X_fp_i])))
+        if len(X_fn) > 0:
+            randi = np.random.randint(0, len(X_fn))
+            X_fn_i = false_negatives_index[randi][0]
+            print_images(X_fn[randi],  "fn_example_{}_coordinates({}).png".format(X_fn_i, str(bounds[X_fn_i])))
+
+def evaluate_model(model, X_train, X_val, X_test, y_train, y_val, y_test, threshold=0.5, pictures=True):
+    print("Evaluating Training data: ")
+    evaluate_dataset(model, X_train, y_train, threshold=threshold, pictures=pictures)
+
+    print("Evaluating Validation data: ")
+    evaluate_dataset(model, X_val, y_val, threshold=threshold, pictures=pictures)
+
+    print("Evaluating Test data: ")
+    evaluate_dataset(model, X_test, y_test, threshold=threshold, pictures=pictures)
+
+
+# In[17]:
+
+
+X, y, bounds = load_data_from_h5()
 
 
 # In[21]:
 
 
-X, y = load_data_from_h5()
+PATH
 
 
-# In[48]:
-
+# In[18]:
 
 
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2)
 model = make_model()
-model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_1_epoch_40", epochs=40, save_history=False)
+model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_1_epoch_45", epochs=45, save_history=True)
 
 
-# In[56]:
+# In[22]:
 
 
 graph_model_performance(history.history)
 
 
-# In[75]:
+# In[29]:
 
 
 evaluate_model(model, X_train, X_val, X_test, y_train, y_val, y_test)
+
+
+# In[65]:
+
+
+
+
+
+# In[ ]:
+
+
+
 
