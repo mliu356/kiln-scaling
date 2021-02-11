@@ -34,7 +34,8 @@ from sklearn.model_selection import train_test_split
 
 
 #Global Variables
-WANTED_BANDS = [12, 11, 1]
+
+WANTED_BANDS = [3, 2, 1]
 IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, NUM_OG_BANDS = (64, 64, len(WANTED_BANDS), 13) 
 MODEL_NAME = "CNN-({})-input-({}, {}, {})-bands-({})".format("Resnet50", IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, str(WANTED_BANDS))
 PATH = "/atlas/u/{}/data/kiln-scaling/models/{}/".format(sys.argv[1], MODEL_NAME) 
@@ -231,7 +232,7 @@ def train_model(model,
                 epochs=20,
                 batch_size=64,
                 multiprocessing=True, 
-                early_stopping=False, 
+                early_stopping=True, 
                 save_history=True):
     
     callbacks = []
@@ -244,7 +245,7 @@ def train_model(model,
                                   save_weights_only=True,
                                   monitor='val_accuracy',
                                   mode='max',
-                                  save_best_only=False)
+                                  save_best=True)
     callbacks.append(checkpoint)                        
     
     history = model.fit(x=X_train,
@@ -350,7 +351,7 @@ PATH
 
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2)
 model = make_model()
-model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_1_epoch_45", epochs=45, save_history=True)
+model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_3_epoch_40", epochs=40, save_history=True)
 
 
 # In[22]:

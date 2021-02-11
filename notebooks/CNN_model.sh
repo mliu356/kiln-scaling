@@ -1,4 +1,5 @@
 #!/bin/bash                                                                                                                                                                                                       \   #SBATCH --partition=tibet --qos=normal                                                                                                     \
+#SBATCH --gres=gpu:2
 #SBATCH --time=06:00:00                                             \
 #SBATCH --nodes=4                                                                                                                                                                                              \
 #SBATCH --cpus-per-task=2
