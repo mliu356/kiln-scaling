@@ -202,23 +202,6 @@ def add_example(ex_data, ex_bounds, save_index, counter, is_positive):
         return save_current_file(save_index, counter)
     return save_index, new_counter
 
-def get_kiln_tiles_approx_coords(bounds, num_rows, num_cols):
-    kilns_in_image = kilns.loc[(kilns['lat'] >= bounds['bottom']) & (kilns['lat'] <= bounds['top']) 
-        & (kilns['lon'] >= bounds['left']) & (kilns['lon'] <= bounds['right'])]
-    
-    tiles = set()
-    for index, kiln in kilns_in_image.iterrows():
-        kiln_pos = (kiln['lat'], kiln['lon'])
-        kiln_to_top = geopy.distance.geodesic(kiln_pos, (bounds['top'], kiln_pos[1])).km
-        kiln_to_bottom = geopy.distance.geodesic(kiln_pos, (bounds['bottom'], kiln_pos[1])).km
-        row_index = int(kiln_to_top / (kiln_to_top + kiln_to_bottom) * num_rows)
-        
-        kiln_to_left = geopy.distance.geodesic(kiln_pos, (kiln_pos[0], bounds['left'])).km
-        kiln_to_right = geopy.distance.geodesic(kiln_pos, (kiln_pos[0], bounds['right'])).km
-        col_index = int(kiln_to_left / (kiln_to_left + kiln_to_right) * num_cols)
-        tiles.add((row_index, col_index))
-    return tiles
-
 def get_kilns_and_drop_tiles(bounds, num_rows, num_cols):
     kilns_in_image = kilns.loc[(kilns['lat'] >= bounds['bottom']) & (kilns['lat'] <= bounds['top']) 
         & (kilns['lon'] >= bounds['left']) & (kilns['lon'] <= bounds['right'])]
@@ -238,7 +221,6 @@ def get_kilns_and_drop_tiles(bounds, num_rows, num_cols):
         
         tiles.add(new_tile)
         drop.discard(new_tile)
-        
         
         neighbors = [(row_index - 1, col_index - 1), (row_index, col_index - 1), (row_index + 1, col_index - 1), 
                      (row_index - 1, col_index), (row_index + 1, col_index), 
