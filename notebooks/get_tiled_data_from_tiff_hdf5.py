@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[203]:
+# In[4]:
 
 
-# !pip install geopy
+# !pip install pandas
 # jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
 
 
-# In[248]:
+# In[6]:
 
 
 import os
@@ -62,7 +62,7 @@ download_all_first = True
 # save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
 # composite_save_path = '/atlas/u/mhelabd/data/kiln-scaling/composites/'
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles_drop_neighbors/'
 composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
 
 # save_path = '../data/tiles_hdf5/'
@@ -73,6 +73,16 @@ kilns = pd.read_csv("../data/bangladesh_kilns.csv")
 all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10', 'B11', 'B12']
 
 print(kilns.head())
+
+
+# In[ ]:
+
+
+def mkdirs(names):
+    for name in names:
+        if not os.path.exists(name):
+            os.makedirs(name)
+mkdirs([save_path, composite_save_path])
 
 
 # In[5]:
@@ -209,6 +219,36 @@ def get_kiln_tiles_approx_coords(bounds, num_rows, num_cols):
         tiles.add((row_index, col_index))
     return tiles
 
+def get_kilns_and_drop_tiles(bounds, num_rows, num_cols):
+    kilns_in_image = kilns.loc[(kilns['lat'] >= bounds['bottom']) & (kilns['lat'] <= bounds['top']) 
+        & (kilns['lon'] >= bounds['left']) & (kilns['lon'] <= bounds['right'])]
+    
+    drop = set()
+    tiles = set()
+    for index, kiln in kilns_in_image.iterrows():
+        kiln_pos = (kiln['lat'], kiln['lon'])
+        kiln_to_top = geopy.distance.geodesic(kiln_pos, (bounds['top'], kiln_pos[1])).km
+        kiln_to_bottom = geopy.distance.geodesic(kiln_pos, (bounds['bottom'], kiln_pos[1])).km
+        row_index = int(kiln_to_top / (kiln_to_top + kiln_to_bottom) * num_rows)
+        
+        kiln_to_left = geopy.distance.geodesic(kiln_pos, (kiln_pos[0], bounds['left'])).km
+        kiln_to_right = geopy.distance.geodesic(kiln_pos, (kiln_pos[0], bounds['right'])).km
+        col_index = int(kiln_to_left / (kiln_to_left + kiln_to_right) * num_cols)
+        new_tile = (row_index, col_index)
+        
+        tiles.add(new_tile)
+        drop.discard(new_tile)
+        
+        
+        neighbors = [(row_index - 1, col_index - 1), (row_index, col_index - 1), (row_index + 1, col_index - 1), 
+                     (row_index - 1, col_index), (row_index + 1, col_index), 
+                     (row_index - 1, col_index + 1), (row_index, col_index + 1), (row_index + 1, col_index + 1)]
+        for n in neighbors:
+            if n not in tiles and n[0] >= 0 and n[0] < num_rows and n[1] >= 0 and n[1] < num_cols:
+                drop.add(n)
+        
+    return tiles, drop
+
 
 # In[126]:
 
@@ -275,7 +315,7 @@ for index, file in enumerate(file_list):
         row_px_excess = ds_height % tile_height
         bounds["bottom"] += row_px_excess / ds_height * (ds_bounds.top - ds_bounds.bottom)
 
-    kiln_tiles = get_kiln_tiles_approx_coords(bounds, num_rows, num_cols)
+    kiln_tiles, drop_tiles = get_kilns_and_drop_tiles(bounds, num_rows, num_cols)
     print("Num tiles with kilns:", len(kiln_tiles))
     print(kiln_tiles)
 
@@ -284,14 +324,12 @@ for index, file in enumerate(file_list):
         px_row = tile_idx_row * tile_height
         for tile_idx_col in range(0, num_cols):
             px_col = tile_idx_col * tile_length
-            tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
-            data, data_bounds = get_data_and_bounds_given_pixels(ds_bounds, bands, px_row, px_col, tile_has_kiln)
-            if data is not None:
-                save_index, counter = add_example(data, data_bounds, save_index, counter, tile_has_kiln)
-#                 if tile_has_kiln:
-#                     print("index", (tile_idx_row, tile_idx_col))
-#                     print("bounds", pretty_bounds(data_bounds))
-#                     pos_examples += [data]
+            drop_tile = (tile_idx_row, tile_idx_col) in drop_tiles
+            if not drop_tile:
+                tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
+                data, data_bounds = get_data_and_bounds_given_pixels(ds_bounds, bands, px_row, px_col, tile_has_kiln)
+                if data is not None:
+                    save_index, counter = add_example(data, data_bounds, save_index, counter, tile_has_kiln)
 
     # handle leftovers in a final file
     if index == len(file_list) - 1:
