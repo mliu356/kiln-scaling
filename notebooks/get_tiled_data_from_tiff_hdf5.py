@@ -282,10 +282,6 @@ labels = np.zeros([examples_per_save_file, 1])
 
 
 # file_list = file_list[:1] # testing purposes
-# test_index1 = (75, 75)
-# test_examples1 = []
-# test_index2 = (99, 72)
-# test_examples2 = []
 
 total_start_time = time.time()
 for index, file in enumerate(file_list):
@@ -325,10 +321,6 @@ for index, file in enumerate(file_list):
                     data, data_bounds = get_data_and_bounds_given_pixels(ds_bounds, bands, px_row, px_col, tile_has_kiln)
                     if data is not None:
                         save_index, counter = add_example(data, data_bounds, save_index, counter, tile_has_kiln)
-                        if (tile_idx_row, tile_idx_col) == test_index1:
-                            test_examples1 += [data]
-                        elif (tile_idx_row, tile_idx_col) == test_index2:
-                            test_examples2 += [data]
 
     # handle leftovers in a final file
     if index == len(file_list) - 1:
