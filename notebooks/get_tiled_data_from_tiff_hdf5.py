@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[203]:
+# In[4]:
 
 
-# !pip install geopy
+# !pip install pandas
 # jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
 
 
-# In[248]:
+# In[1]:
 
 
 import os
@@ -50,7 +50,7 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[250]:
+# In[22]:
 
 
 # set params
@@ -58,14 +58,17 @@ tile_height, tile_length = (64, 64)
 examples_per_save_file = 1000
 composite_file_name = 'bangladesh_all_bands_final'
 download_all_first = True
+offset_px = 20
+offset_configs = [(0, 0), (offset_px, 0), (0, offset_px), (offset_px, offset_px)]
+
 
 # save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
 # composite_save_path = '/atlas/u/mhelabd/data/kiln-scaling/composites/'
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles_with_offsets/'
 composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
 
-# save_path = '../data/tiles_hdf5/'
+# save_path = '../data/tiles_testing/'
 # composite_save_path = '../data/composites/'
 
 # resources
@@ -73,6 +76,16 @@ kilns = pd.read_csv("../data/bangladesh_kilns.csv")
 all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10', 'B11', 'B12']
 
 print(kilns.head())
+
+
+# In[4]:
+
+
+def mkdirs(names):
+    for name in names:
+        if not os.path.exists(name):
+            os.makedirs(name)
+mkdirs([save_path, composite_save_path])
 
 
 # In[5]:
@@ -97,7 +110,7 @@ print("Number of image grid columns:", num_image_cols)
 print("Number of image grid rows:", num_image_rows)
 
 
-# In[92]:
+# In[7]:
 
 
 coords = []
@@ -117,7 +130,7 @@ flat_coords += [flat_coords[0]]
 bangladesh_geo = Polygon(flat_coords)
 
 
-# In[93]:
+# In[8]:
 
 
 # optional pre-download all files
@@ -136,7 +149,7 @@ if download_all_first:
     print("Done downloading all files.")
 
 
-# In[228]:
+# In[18]:
 
 
 def get_bands_and_bounds_from_file(file):
@@ -170,7 +183,12 @@ def get_data_and_bounds_given_pixels(ds_bounds, bands, start_row, start_col, con
     if not contains_kiln and not bangladesh_geo.intersects(tile_geo):
         num_tiles_dropped += 1
         return None, None
-    return bands[:, start_row : start_row + tile_height, start_col : start_col + tile_length], bounds
+    tile_data = bands[:, start_row : start_row + tile_height, start_col : start_col + tile_length]
+    if (tile_data.shape != (13, 64, 64)):
+        print("start row", start_row, "start_col", start_col)
+        print("ds height, length", ds_height, ds_length)
+        print("tile shape", tile_data.shape)
+    return tile_data, bounds
 
 def save_current_file(save_index, counter):
     filename = save_path + "examples_" + str(save_index) + ".hdf5"
@@ -192,25 +210,45 @@ def add_example(ex_data, ex_bounds, save_index, counter, is_positive):
         return save_current_file(save_index, counter)
     return save_index, new_counter
 
-def get_kiln_tiles_approx_coords(bounds, num_rows, num_cols):
+def get_kilns_and_drop_tiles(bounds, num_rows, num_cols, offset_config, image_row_px, image_col_px):
     kilns_in_image = kilns.loc[(kilns['lat'] >= bounds['bottom']) & (kilns['lat'] <= bounds['top']) 
         & (kilns['lon'] >= bounds['left']) & (kilns['lon'] <= bounds['right'])]
     
+    drop = set()
     tiles = set()
     for index, kiln in kilns_in_image.iterrows():
         kiln_pos = (kiln['lat'], kiln['lon'])
         kiln_to_top = geopy.distance.geodesic(kiln_pos, (bounds['top'], kiln_pos[1])).km
         kiln_to_bottom = geopy.distance.geodesic(kiln_pos, (bounds['bottom'], kiln_pos[1])).km
-        row_index = int(kiln_to_top / (kiln_to_top + kiln_to_bottom) * num_rows)
+        row_px = kiln_to_top / (kiln_to_top + kiln_to_bottom) * image_row_px
+        row_index = int(row_px / tile_height)
+        if row_px % tile_height < offset_config[0]:
+            row_index -= 1
         
         kiln_to_left = geopy.distance.geodesic(kiln_pos, (kiln_pos[0], bounds['left'])).km
         kiln_to_right = geopy.distance.geodesic(kiln_pos, (kiln_pos[0], bounds['right'])).km
-        col_index = int(kiln_to_left / (kiln_to_left + kiln_to_right) * num_cols)
-        tiles.add((row_index, col_index))
-    return tiles
+        col_px = kiln_to_left / (kiln_to_left + kiln_to_right) * image_col_px
+        col_index = int(col_px / tile_length)
+        if col_px % tile_length < offset_config[1]:
+            col_index -= 1
+        
+        if col_index >= 0 and row_index >= 0:
+            new_tile = (row_index, col_index)
+
+            tiles.add(new_tile)
+            drop.discard(new_tile)
+
+            neighbors = [(row_index - 1, col_index - 1), (row_index, col_index - 1), (row_index + 1, col_index - 1), 
+                         (row_index - 1, col_index), (row_index + 1, col_index), 
+                         (row_index - 1, col_index + 1), (row_index, col_index + 1), (row_index + 1, col_index + 1)]
+            for n in neighbors:
+                if n not in tiles and n[0] >= 0 and n[0] < num_rows and n[1] >= 0 and n[1] < num_cols:
+                    drop.add(n)
+
+    return tiles, drop
 
 
-# In[126]:
+# In[10]:
 
 
 ## testing & visualization methods
@@ -227,12 +265,11 @@ def pretty_bounds(bounds):
     return [[bounds[1], bounds[0]], [bounds[1], bounds[2]], [bounds[3], bounds[2]], [bounds[3], bounds[0]], [bounds[1], bounds[0]]]
 
 
-# In[309]:
+# In[23]:
 
 
 ## testing variables
 num_tiles_dropped = 0
-# pos_examples = []
 
 save_index, counter = 0, 0
 
@@ -241,19 +278,20 @@ examples = np.zeros([examples_per_save_file, len(all_bands), tile_height, tile_l
 labels = np.zeros([examples_per_save_file, 1])
 
 
-# In[233]:
+# In[33]:
 
 
 # file_list = file_list[:1] # testing purposes
+# test_index1 = (75, 75)
+# test_examples1 = []
+# test_index2 = (99, 72)
+# test_examples2 = []
 
 total_start_time = time.time()
 for index, file in enumerate(file_list):
     file_start_time = time.time()
     bands, ds_bounds = get_bands_and_bounds_from_file(file)
-    
-    num_bands, ds_height, ds_length = bands.shape
-    num_rows = ds_height // tile_height
-    num_cols = ds_length // tile_length
+    _, ds_height, ds_length = bands.shape
 
     bounds = {
         "bottom": ds_bounds.bottom,
@@ -261,44 +299,43 @@ for index, file in enumerate(file_list):
         "left": ds_bounds.left,
         "right": ds_bounds.right
     }
+    
+    # calculate excess row and col pixels
+    col_px_excess = ds_length % tile_length
+    bounds["right"] -= col_px_excess / ds_length * (ds_bounds.right - ds_bounds.left)
+    row_px_excess = ds_height % tile_height
+    bounds["bottom"] += row_px_excess / ds_height * (ds_bounds.top - ds_bounds.bottom)
 
-    row_px_excess, col_px_excess = None, None
-    percent_row_excess, percent_col_excess = None, None
+    for offset_config in offset_configs:
+        num_rows = int((ds_height - offset_config[0]) / tile_height)
+        num_cols = int((ds_length - offset_config[1]) / tile_length)
+        
+        kiln_tiles, drop_tiles = get_kilns_and_drop_tiles(bounds, num_rows, num_cols, offset_config, ds_height, ds_length)
+        print("Offset", offset_config, "Num tiles with kilns:", len(kiln_tiles))
+#         print(kiln_tiles)
 
-    if index % num_image_cols == num_image_cols - 1: # rightmost column
-        # calculate excess col pixels
-        col_px_excess = ds_length % tile_length
-        bounds["right"] -= col_px_excess / ds_length * (ds_bounds.right - ds_bounds.left)
-
-    if index // num_image_cols == num_image_rows - 1: # last row
-        # calculate excess row pixels
-        row_px_excess = ds_height % tile_height
-        bounds["bottom"] += row_px_excess / ds_height * (ds_bounds.top - ds_bounds.bottom)
-
-    kiln_tiles = get_kiln_tiles_approx_coords(bounds, num_rows, num_cols)
-    print("Num tiles with kilns:", len(kiln_tiles))
-    print(kiln_tiles)
-
-    print("Tiling dataset...")
-    for tile_idx_row in range(0, num_rows):
-        px_row = tile_idx_row * tile_height
-        for tile_idx_col in range(0, num_cols):
-            px_col = tile_idx_col * tile_length
-            tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
-            data, data_bounds = get_data_and_bounds_given_pixels(ds_bounds, bands, px_row, px_col, tile_has_kiln)
-            if data is not None:
-                save_index, counter = add_example(data, data_bounds, save_index, counter, tile_has_kiln)
-#                 if tile_has_kiln:
-#                     print("index", (tile_idx_row, tile_idx_col))
-#                     print("bounds", pretty_bounds(data_bounds))
-#                     pos_examples += [data]
+        print("Tiling dataset...")
+        for tile_idx_row in range(0, num_rows):
+            px_row = tile_idx_row * tile_height + offset_config[0]
+            for tile_idx_col in range(0, num_cols):
+                px_col = tile_idx_col * tile_length + offset_config[1]
+                drop_tile = (tile_idx_row, tile_idx_col) in drop_tiles
+                if not drop_tile:
+                    tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
+                    data, data_bounds = get_data_and_bounds_given_pixels(ds_bounds, bands, px_row, px_col, tile_has_kiln)
+                    if data is not None:
+                        save_index, counter = add_example(data, data_bounds, save_index, counter, tile_has_kiln)
+                        if (tile_idx_row, tile_idx_col) == test_index1:
+                            test_examples1 += [data]
+                        elif (tile_idx_row, tile_idx_col) == test_index2:
+                            test_examples2 += [data]
 
     # handle leftovers in a final file
     if index == len(file_list) - 1:
         save_current_file(save_index, counter)
 
     print("Total tiles dropped (outside country):", num_tiles_dropped)
-    print("Total tiles kept:", str(num_rows * num_cols - num_tiles_dropped))
+    print("Total tiles kept:", str(num_rows * num_cols * len(offset_configs) - num_tiles_dropped))
     num_tiles_dropped = 0
     print("Finished file in", time.time() - file_start_time, "\n")
 print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - total_start_time))
@@ -306,12 +343,18 @@ print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - tota
 
 # ## Test hdf5 file data format & visualizations
 
-# In[244]:
+# In[51]:
 
 
 # visualize_tile(pos_examples[10])
 # visualize_tile(examples[1])
-# visualize_tile(examples[2])
+# visualize_tile(test_examples1[3])
+
+
+# In[53]:
+
+
+# visualize_tile(test_examples1[1])
 
 
 # In[304]:
@@ -335,10 +378,10 @@ print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - tota
 #             y = np.concatenate((y, y_i))
 
 
-# In[315]:
+# In[27]:
 
 
-# print("Examples w/ kilns:", np.where(y==1.0)[0])
+# print("Examples w/ kilns:", np.where(labels==1.0)[0])
 # index = 4321
 # print("label:", y[index])
 # vis_X = X[index]
