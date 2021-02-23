@@ -8,7 +8,7 @@
 # jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
 
 
-# In[1]:
+# In[93]:
 
 
 import os
@@ -24,9 +24,10 @@ from shapely.geometry.polygon import Polygon
 from os import path
 import h5py
 import geopy.distance
+from rasterio.windows import Window, WindowMethodsMixin, bounds as r_bounds
 
 
-# In[2]:
+# In[6]:
 
 
 from pydrive.auth import GoogleAuth
@@ -50,26 +51,25 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[22]:
+# In[124]:
 
+
+local_testing_mode = True
 
 # set params
 tile_height, tile_length = (64, 64)
 examples_per_save_file = 1000
 composite_file_name = 'bangladesh_all_bands_final'
-download_all_first = True
+download_all_first = not local_testing_mode
 offset_px = 20
 offset_configs = [(0, 0), (offset_px, 0), (0, offset_px), (offset_px, offset_px)]
 
-
-# save_path = '/atlas/u/mhelabd/data/kiln-scaling/tiles/'
-# composite_save_path = '/atlas/u/mhelabd/data/kiln-scaling/composites/'
-
-save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles_with_offsets/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles_with_offsets_coords/'
 composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
 
-# save_path = '../data/tiles_testing/'
-# composite_save_path = '../data/composites/'
+if local_testing_mode:
+    save_path = '../data/tiles_testing1/'
+    composite_save_path = '../data/composites/'
 
 # resources
 kilns = pd.read_csv("../data/bangladesh_kilns.csv")
@@ -78,7 +78,7 @@ all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10',
 print(kilns.head())
 
 
-# In[4]:
+# In[8]:
 
 
 def mkdirs(names):
@@ -88,7 +88,7 @@ def mkdirs(names):
 mkdirs([save_path, composite_save_path])
 
 
-# In[5]:
+# In[9]:
 
 
 file_list = drive.ListFile({'q': "title contains '" + composite_file_name + "'"}).GetList()
@@ -98,7 +98,7 @@ for file in file_list[:5]:
   print('title: %s, id: %s' % (file['title'], file['id']))
 
 
-# In[6]:
+# In[10]:
 
 
 # calculate image grid
@@ -110,7 +110,7 @@ print("Number of image grid columns:", num_image_cols)
 print("Number of image grid rows:", num_image_rows)
 
 
-# In[7]:
+# In[18]:
 
 
 coords = []
@@ -130,7 +130,7 @@ flat_coords += [flat_coords[0]]
 bangladesh_geo = Polygon(flat_coords)
 
 
-# In[8]:
+# In[11]:
 
 
 # optional pre-download all files
@@ -149,46 +149,42 @@ if download_all_first:
     print("Done downloading all files.")
 
 
-# In[18]:
+# In[113]:
 
 
-def get_bands_and_bounds_from_file(file):
-    print("Starting file " + file['title'])
-    composite_file_path = composite_save_path + file['title']
-    if path.exists(composite_file_path):
-        print("File already downloaded.")
-    else:
-        print("Downloading file...")
-        # download the file
-        download_file = drive.CreateFile({'id': file['id']})
-        file.GetContentFile(composite_file_path)
-    
-    # open file with rasterio
-    print("Reading file...")
-    dataset = rasterio.open(composite_file_path)
-    bands = dataset.read()
-    print("Done processing file")
-    return bands, dataset.bounds
-
-def get_data_and_bounds_given_pixels(ds_bounds, bands, start_row, start_col, contains_kiln):
+def get_tile_info_from_px(dataset, px_row, px_col):
     global num_tiles_dropped
+    global pos_examples_data, pos_examples_bounds
+    global test_ex_data, test_ex_bounds
     
-    num_bands, ds_height, ds_length = bands.shape
-    tile_top = ds_bounds.top - (start_row / ds_height) * (ds_bounds.top - ds_bounds.bottom)
-    tile_bottom = ds_bounds.top - ((start_row + tile_height) / ds_height) * (ds_bounds.top - ds_bounds.bottom)
-    tile_left = ds_bounds.left + (start_col / ds_length) * (ds_bounds.right - ds_bounds.left)
-    tile_right = ds_bounds.left + ((start_col + tile_length) / ds_length) * (ds_bounds.right - ds_bounds.left)
-    bounds = np.array([tile_bottom, tile_left, tile_top, tile_right])
-    tile_geo = Polygon([[tile_left, tile_top], [tile_right, tile_top], [tile_right, tile_bottom], [tile_left, tile_bottom], [tile_left, tile_top]])
-    if not contains_kiln and not bangladesh_geo.intersects(tile_geo):
+    window = Window(px_col, px_row, tile_length, tile_height)
+    transform = dataset.window_transform(window)
+    profile = dataset.profile
+    profile.update({
+        'height': tile_length,
+        'width': tile_height,
+        'transform': transform})
+    
+    bands = dataset.read(window=window)
+    bounds = list(r_bounds(window, dataset.transform))
+    tile_geo = Polygon([[bounds[0], bounds[2]], [bounds[0], bounds[3]], [bounds[1], bounds[3]], [bounds[1], bounds[2]], [bounds[0], bounds[2]]])
+    
+    kilns_in_image = kilns.loc[(kilns['lat'] >= bounds[1]) & (kilns['lat'] <= bounds[3]) 
+        & (kilns['lon'] >= bounds[0]) & (kilns['lon'] <= bounds[2])]
+    if len(kilns_in_image) >= 1:
+        print(kilns_in_image)
+        pos_examples_data += [bands]
+        pos_examples_bounds += [bounds]
+        return bands, bounds, True
+    elif not bangladesh_geo.intersects(tile_geo):
         num_tiles_dropped += 1
-        return None, None
-    tile_data = bands[:, start_row : start_row + tile_height, start_col : start_col + tile_length]
-    if (tile_data.shape != (13, 64, 64)):
-        print("start row", start_row, "start_col", start_col)
-        print("ds height, length", ds_height, ds_length)
-        print("tile shape", tile_data.shape)
-    return tile_data, bounds
+        return None, None, None
+    else:
+        return bands, bounds, False
+
+
+# In[109]:
+
 
 def save_current_file(save_index, counter):
     filename = save_path + "examples_" + str(save_index) + ".hdf5"
@@ -210,45 +206,8 @@ def add_example(ex_data, ex_bounds, save_index, counter, is_positive):
         return save_current_file(save_index, counter)
     return save_index, new_counter
 
-def get_kilns_and_drop_tiles(bounds, num_rows, num_cols, offset_config, image_row_px, image_col_px):
-    kilns_in_image = kilns.loc[(kilns['lat'] >= bounds['bottom']) & (kilns['lat'] <= bounds['top']) 
-        & (kilns['lon'] >= bounds['left']) & (kilns['lon'] <= bounds['right'])]
-    
-    drop = set()
-    tiles = set()
-    for index, kiln in kilns_in_image.iterrows():
-        kiln_pos = (kiln['lat'], kiln['lon'])
-        kiln_to_top = geopy.distance.geodesic(kiln_pos, (bounds['top'], kiln_pos[1])).km
-        kiln_to_bottom = geopy.distance.geodesic(kiln_pos, (bounds['bottom'], kiln_pos[1])).km
-        row_px = kiln_to_top / (kiln_to_top + kiln_to_bottom) * image_row_px
-        row_index = int(row_px / tile_height)
-        if row_px % tile_height < offset_config[0]:
-            row_index -= 1
-        
-        kiln_to_left = geopy.distance.geodesic(kiln_pos, (kiln_pos[0], bounds['left'])).km
-        kiln_to_right = geopy.distance.geodesic(kiln_pos, (kiln_pos[0], bounds['right'])).km
-        col_px = kiln_to_left / (kiln_to_left + kiln_to_right) * image_col_px
-        col_index = int(col_px / tile_length)
-        if col_px % tile_length < offset_config[1]:
-            col_index -= 1
-        
-        if col_index >= 0 and row_index >= 0:
-            new_tile = (row_index, col_index)
 
-            tiles.add(new_tile)
-            drop.discard(new_tile)
-
-            neighbors = [(row_index - 1, col_index - 1), (row_index, col_index - 1), (row_index + 1, col_index - 1), 
-                         (row_index - 1, col_index), (row_index + 1, col_index), 
-                         (row_index - 1, col_index + 1), (row_index, col_index + 1), (row_index + 1, col_index + 1)]
-            for n in neighbors:
-                if n not in tiles and n[0] >= 0 and n[0] < num_rows and n[1] >= 0 and n[1] < num_cols:
-                    drop.add(n)
-
-    return tiles, drop
-
-
-# In[10]:
+# In[55]:
 
 
 ## testing & visualization methods
@@ -262,14 +221,18 @@ def visualize_tile(image, indices=[3, 2, 1]):
     plt.imshow(X)
     
 def pretty_bounds(bounds):
-    return [[bounds[1], bounds[0]], [bounds[1], bounds[2]], [bounds[3], bounds[2]], [bounds[3], bounds[0]], [bounds[1], bounds[0]]]
+    return [[bounds[0], bounds[1]], [bounds[2], bounds[1]], [bounds[2], bounds[3]], [bounds[0], bounds[3]], [bounds[0], bounds[1]]]
 
 
-# In[23]:
+# In[51]:
 
 
 ## testing variables
 num_tiles_dropped = 0
+pos_examples_data = []
+pos_examples_bounds = []
+test_ex_data = []
+test_ex_bounds = []
 
 save_index, counter = 0, 0
 
@@ -278,50 +241,37 @@ examples = np.zeros([examples_per_save_file, len(all_bands), tile_height, tile_l
 labels = np.zeros([examples_per_save_file, 1])
 
 
-# In[33]:
+# In[114]:
 
 
-# file_list = file_list[:1] # testing purposes
+if local_testing_mode:
+    file_list = file_list[:1]
 
 total_start_time = time.time()
 for index, file in enumerate(file_list):
     file_start_time = time.time()
-    bands, ds_bounds = get_bands_and_bounds_from_file(file)
-    _, ds_height, ds_length = bands.shape
-
-    bounds = {
-        "bottom": ds_bounds.bottom,
-        "top": ds_bounds.top,
-        "left": ds_bounds.left,
-        "right": ds_bounds.right
-    }
-    
-    # calculate excess row and col pixels
-    col_px_excess = ds_length % tile_length
-    bounds["right"] -= col_px_excess / ds_length * (ds_bounds.right - ds_bounds.left)
-    row_px_excess = ds_height % tile_height
-    bounds["bottom"] += row_px_excess / ds_height * (ds_bounds.top - ds_bounds.bottom)
+    print("Starting file " + file['title'])
+    composite_file_path = composite_save_path + file['title']
+    if not path.exists(composite_file_path):
+        print("Downloading file...")
+        # download the file
+        download_file = drive.CreateFile({'id': file['id']})
+        file.GetContentFile(composite_file_path)
+        
+    dataset = rasterio.open(composite_file_path)
 
     for offset_config in offset_configs:
-        num_rows = int((ds_height - offset_config[0]) / tile_height)
-        num_cols = int((ds_length - offset_config[1]) / tile_length)
+        num_rows = int((dataset.height - offset_config[0]) / tile_height)
+        num_cols = int((dataset.width - offset_config[1]) / tile_length)
         
-        kiln_tiles, drop_tiles = get_kilns_and_drop_tiles(bounds, num_rows, num_cols, offset_config, ds_height, ds_length)
-        print("Offset", offset_config, "Num tiles with kilns:", len(kiln_tiles))
-#         print(kiln_tiles)
-
-        print("Tiling dataset...")
         for tile_idx_row in range(0, num_rows):
             px_row = tile_idx_row * tile_height + offset_config[0]
             for tile_idx_col in range(0, num_cols):
                 px_col = tile_idx_col * tile_length + offset_config[1]
-                drop_tile = (tile_idx_row, tile_idx_col) in drop_tiles
-                if not drop_tile:
-                    tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
-                    data, data_bounds = get_data_and_bounds_given_pixels(ds_bounds, bands, px_row, px_col, tile_has_kiln)
-                    if data is not None:
-                        save_index, counter = add_example(data, data_bounds, save_index, counter, tile_has_kiln)
-
+                t_data, t_bounds, t_has_kiln = get_tile_info_from_px(dataset, px_row, px_col)
+                if t_data is not None:
+                    save_index, counter = add_example(t_data, t_bounds, save_index, counter, t_has_kiln)
+                    
     # handle leftovers in a final file
     if index == len(file_list) - 1:
         save_current_file(save_index, counter)
@@ -335,39 +285,20 @@ print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - tota
 
 # ## Test hdf5 file data format & visualizations
 
-# In[51]:
+# In[83]:
 
 
-# visualize_tile(pos_examples[10])
-# visualize_tile(examples[1])
-# visualize_tile(test_examples1[3])
+print(pretty_bounds([dataset.bounds.left, dataset.bounds.bottom, dataset.bounds.right, dataset.bounds.top]))
 
 
-# In[53]:
+# In[119]:
 
 
-# visualize_tile(test_examples1[1])
+# print(len(pos_examples_bounds))
+# vis_index = 2
 
-
-# In[304]:
-
-
-# WANTED_BANDS = [3, 2, 1]
-
-# for i in range(5):
-#     with h5py.File(save_path + "examples_" + str(i) + ".hdf5", "r") as f:
-#         if i == 0:
-#             X = np.array(f["images"][()])\
-#                 .reshape((-1, len(all_bands), 64, 64))
-#             X = np.moveaxis(X, 1, -1)[:, :, :, WANTED_BANDS]
-#             y = np.array(f["labels"][()])
-#         else:
-#             x_i = np.array(f["images"][()])\
-#                 .reshape((-1, len(all_bands), 64, 64))
-#             x_i = np.moveaxis(x_i, 1, -1)[:, :, :, WANTED_BANDS]
-#             X = np.concatenate((X, x_i))
-#             y_i = np.array(f["labels"][()])
-#             y = np.concatenate((y, y_i))
+# visualize_tile(pos_examples_data[vis_index])
+# pretty_bounds(pos_examples_bounds[vis_index])
 
 
 # In[27]:
