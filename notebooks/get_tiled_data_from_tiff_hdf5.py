@@ -8,7 +8,7 @@
 # jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
 
 
-# In[93]:
+# In[1]:
 
 
 import os
@@ -24,10 +24,10 @@ from shapely.geometry.polygon import Polygon
 from os import path
 import h5py
 import geopy.distance
-from rasterio.windows import Window, WindowMethodsMixin, bounds as r_bounds
+from rasterio.windows import Window, bounds as r_bounds
 
 
-# In[6]:
+# In[2]:
 
 
 from pydrive.auth import GoogleAuth
@@ -51,7 +51,7 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[124]:
+# In[3]:
 
 
 local_testing_mode = True
@@ -78,7 +78,7 @@ all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10',
 print(kilns.head())
 
 
-# In[8]:
+# In[4]:
 
 
 def mkdirs(names):
@@ -88,7 +88,7 @@ def mkdirs(names):
 mkdirs([save_path, composite_save_path])
 
 
-# In[9]:
+# In[5]:
 
 
 file_list = drive.ListFile({'q': "title contains '" + composite_file_name + "'"}).GetList()
@@ -98,7 +98,7 @@ for file in file_list[:5]:
   print('title: %s, id: %s' % (file['title'], file['id']))
 
 
-# In[10]:
+# In[6]:
 
 
 # calculate image grid
@@ -110,7 +110,7 @@ print("Number of image grid columns:", num_image_cols)
 print("Number of image grid rows:", num_image_rows)
 
 
-# In[18]:
+# In[7]:
 
 
 coords = []
@@ -130,7 +130,7 @@ flat_coords += [flat_coords[0]]
 bangladesh_geo = Polygon(flat_coords)
 
 
-# In[11]:
+# In[8]:
 
 
 # optional pre-download all files
@@ -149,41 +149,34 @@ if download_all_first:
     print("Done downloading all files.")
 
 
-# In[113]:
+# In[9]:
 
 
-def get_tile_info_from_px(dataset, px_row, px_col):
+def get_tile_info_from_px(dataset, px_row, px_col, has_kiln):
     global num_tiles_dropped
     global pos_examples_data, pos_examples_bounds
     global test_ex_data, test_ex_bounds
     
     window = Window(px_col, px_row, tile_length, tile_height)
-    transform = dataset.window_transform(window)
-    profile = dataset.profile
-    profile.update({
-        'height': tile_length,
-        'width': tile_height,
-        'transform': transform})
-    
     bands = dataset.read(window=window)
     bounds = list(r_bounds(window, dataset.transform))
     tile_geo = Polygon([[bounds[0], bounds[2]], [bounds[0], bounds[3]], [bounds[1], bounds[3]], [bounds[1], bounds[2]], [bounds[0], bounds[2]]])
     
+    if has_kiln or bangladesh_geo.intersects(tile_geo):
+        return bands, bounds
+    else:
+        return None, None
+    
+def get_tile_has_kiln(dataset, px_row, px_col):
+    window = Window(px_col, px_row, tile_length, tile_height)
+    bounds = list(r_bounds(window, dataset.transform))
     kilns_in_image = kilns.loc[(kilns['lat'] >= bounds[1]) & (kilns['lat'] <= bounds[3]) 
         & (kilns['lon'] >= bounds[0]) & (kilns['lon'] <= bounds[2])]
-    if len(kilns_in_image) >= 1:
-        print(kilns_in_image)
-        pos_examples_data += [bands]
-        pos_examples_bounds += [bounds]
-        return bands, bounds, True
-    elif not bangladesh_geo.intersects(tile_geo):
-        num_tiles_dropped += 1
-        return None, None, None
-    else:
-        return bands, bounds, False
+
+    return len(kilns_in_image) >= 1
 
 
-# In[109]:
+# In[10]:
 
 
 def save_current_file(save_index, counter):
@@ -207,7 +200,7 @@ def add_example(ex_data, ex_bounds, save_index, counter, is_positive):
     return save_index, new_counter
 
 
-# In[55]:
+# In[11]:
 
 
 ## testing & visualization methods
@@ -224,7 +217,7 @@ def pretty_bounds(bounds):
     return [[bounds[0], bounds[1]], [bounds[2], bounds[1]], [bounds[2], bounds[3]], [bounds[0], bounds[3]], [bounds[0], bounds[1]]]
 
 
-# In[51]:
+# In[12]:
 
 
 ## testing variables
@@ -241,7 +234,7 @@ examples = np.zeros([examples_per_save_file, len(all_bands), tile_height, tile_l
 labels = np.zeros([examples_per_save_file, 1])
 
 
-# In[114]:
+# In[15]:
 
 
 if local_testing_mode:
@@ -260,17 +253,48 @@ for index, file in enumerate(file_list):
         
     dataset = rasterio.open(composite_file_path)
 
-    for offset_config in offset_configs:
+    for offset_index, offset_config in enumerate(offset_configs):
         num_rows = int((dataset.height - offset_config[0]) / tile_height)
         num_cols = int((dataset.width - offset_config[1]) / tile_length)
         
+        # first pass to calculate kiln_tiles
+        kiln_tiles = []
         for tile_idx_row in range(0, num_rows):
             px_row = tile_idx_row * tile_height + offset_config[0]
             for tile_idx_col in range(0, num_cols):
                 px_col = tile_idx_col * tile_length + offset_config[1]
-                t_data, t_bounds, t_has_kiln = get_tile_info_from_px(dataset, px_row, px_col)
-                if t_data is not None:
-                    save_index, counter = add_example(t_data, t_bounds, save_index, counter, t_has_kiln)
+                if get_tile_has_kiln(dataset, px_row, px_col):
+                    kiln_tiles += [(tile_idx_row, tile_idx_col)]
+        
+        # only calculate drop_tiles for first offset 
+        # (for all other offsets, no negative examples are saved anyways)
+        drop_tiles = []
+        if offset_index == 0:
+            for row_index, col_index in kiln_tiles:
+                neighbors = [(row_index - 1, col_index - 1), (row_index, col_index - 1), (row_index + 1, col_index - 1), 
+                             (row_index - 1, col_index), (row_index + 1, col_index), 
+                             (row_index - 1, col_index + 1), (row_index, col_index + 1), (row_index + 1, col_index + 1)]
+                for n in neighbors:
+                    if n not in kiln_tiles and n[0] >= 0 and n[0] < num_rows and n[1] >= 0 and n[1] < num_cols:
+                        drop_tiles += [n]
+        
+        # second pass to calculate and save data
+        for tile_idx_row in range(0, num_rows):
+            px_row = tile_idx_row * tile_height + offset_config[0]
+            for tile_idx_col in range(0, num_cols):
+                px_col = tile_idx_col * tile_length + offset_config[1]
+                tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
+                t_data, t_bounds = None, None
+                if tile_has_kiln or offset_index == 0:
+                    t_data, t_bounds = get_tile_info_from_px(dataset, px_row, px_col, tile_has_kiln)
+                
+                # save data only if:
+                # (1) tile is a kiln OR
+                # (2a) t_data is not None (first offset and tile in country)
+                # (2b) tile is not a neighbor of a kiln
+                tile_is_drop = (tile_idx_row, tile_idx_col) in drop_tiles
+                if tile_has_kiln or (t_data is not None and not tile_is_drop):
+                    save_index, counter = add_example(t_data, t_bounds, save_index, counter, tile_has_kiln)
                     
     # handle leftovers in a final file
     if index == len(file_list) - 1:
