@@ -54,7 +54,7 @@ drive = GoogleDrive(gauth)
 # In[3]:
 
 
-local_testing_mode = True
+local_testing_mode = False
 
 # set params
 tile_height, tile_length = (64, 64)
@@ -64,7 +64,7 @@ download_all_first = not local_testing_mode
 offset_px = 20
 offset_configs = [(0, 0), (offset_px, 0), (0, offset_px), (offset_px, offset_px)]
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/tiles_with_offsets_coords/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/final_tiles/'
 composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
 
 if local_testing_mode:
