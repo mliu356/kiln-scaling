@@ -24,21 +24,22 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.model_selection import train_test_split
 
 
-# In[25]:
+# In[2]:
 
 
 sys.argv[1] = "mhelabd"
 
 
-# In[26]:
+# In[3]:
 
 
 #Global Variables
-WANTED_BANDS = [12, 8, 3]
+WANTED_BANDS = [3, 2, 1]
 IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, NUM_OG_BANDS = (64, 64, len(WANTED_BANDS), 13) 
-MODEL_NAME = "CNN-({})-input-({}, {}, {})-bands-({})".format("Resnet50", IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, str(WANTED_BANDS))
+MODEL_NAME = "Augmented-drop-neighbors-CNN-({})-input-({}, {}, {})-bands-({})".format("Resnet50", IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, str(WANTED_BANDS))
 PATH = "/atlas/u/{}/data/kiln-scaling/models/{}/".format(sys.argv[1], MODEL_NAME) 
-DATA_PATH = "/atlas/u/mliu356/data/kiln-scaling/tiles/"
+# DATA_PATH = "/atlas/u/mliu356/data/kiln-scaling/tiles_drop_neighbors/"
+DATA_PATH = "/atlas/u/mliu356/data/kiln-scaling/final_tiles/"
 MODEL_WEIGHTS_PATH = PATH + "weights/"
 MODEL_HISTORY_PATH = PATH + "history/"
 MODEL_EVALUATION_PATH = PATH + "evaluation/"
@@ -67,7 +68,7 @@ mkdirs([MODEL_WEIGHTS_PATH, MODEL_HISTORY_PATH, MODEL_EVALUATION_PATH, MODEL_EVA
 
 
 def save_h5_file(X, y, bounds):
-    filename = BALANCED_DATA_PATH + ("preprocessed_" if PREPROCESS else "") + "all_examples.hdf5"
+    filename = BALANCED_DATA_PATH + ("preprocessed_" if PREPROCESS else "") + "final_tiles.hdf5"
     print("Saving file", filename)
     f = h5py.File(filename, 'w')
     bounds_dset = f.create_dataset("bounds", data=bounds)
@@ -106,10 +107,10 @@ def balance_and_save_h5_data(preprocess=False, verbose=VERBOSE):
     save_h5_file(X, y, bounds)
 
 
-# In[6]:
+# In[ ]:
 
 
-# balance_and_save_h5_data()
+balance_and_save_h5_data()
 
 
 # In[7]:
@@ -118,34 +119,42 @@ def balance_and_save_h5_data(preprocess=False, verbose=VERBOSE):
 def load_data_from_h5(preprocess=PREPROCESS, verbose=VERBOSE,                       balance_dataset=BALANCE_DATASET, use_balanced_dataset=USE_BALANCED_DATASET):
     X, y = [], []
     data_path = BALANCED_DATA_PATH if use_balanced_dataset else DATA_PATH
-    for i, filename in enumerate(os.listdir(data_path)):
-        print("extracting: ",filename) 
+    if use_balanced_dataset:
+        filename = "final_tiles.hdf5"
         with h5py.File(data_path + filename, "r") as f:
-            if i == 0:
-                X = np.array(f["images"][()])                    .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
-                X = np.moveaxis(X, 1, -1)[:, :, :, WANTED_BANDS]
-                y = np.array(f["labels"][()])
-                bounds = np.array(f["bounds"][()])
-            else:
-                x_i = np.array(f["images"][()])                    .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
-                x_i = np.moveaxis(x_i, 1, -1)[:, :, :, WANTED_BANDS]
-                X = np.concatenate((X, x_i))
-                y_i = np.array(f["labels"][()])
-                y = np.concatenate((y, y_i))
-                
-                bounds_i = np.array(f["bounds"][()])
-                bounds = np.concatenate((bounds, bounds_i))
-        if preprocess:
-            X = preprocess_input(X)  
-        if balance_dataset:
-            #since y = 1 is always less
-            n= y[y==1].shape[0]
-            mask = np.hstack([np.random.choice(np.where(y == l)[0], n, replace=False)
-                              for l in np.unique(y)])
-            X = X[mask]
-            y = y[mask]
-            bounds = bounds[mask]
-        
+            print("extracting: ", filename) 
+            X = np.array(f["images"][()])                .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
+            X = np.moveaxis(X, 1, -1)[:, :, :, WANTED_BANDS]
+            y = np.array(f["labels"][()])
+            bounds = np.array(f["bounds"][()])
+    else:
+        for i, filename in enumerate(os.listdir(data_path)):
+            print("extracting: ",filename) 
+            with h5py.File(data_path + filename, "r") as f:
+                if i == 0:
+                    X = np.array(f["images"][()])                        .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
+                    X = np.moveaxis(X, 1, -1)[:, :, :, WANTED_BANDS]
+                    y = np.array(f["labels"][()])
+                    bounds = np.array(f["bounds"][()])
+                else:
+                    x_i = np.array(f["images"][()])                        .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
+                    x_i = np.moveaxis(x_i, 1, -1)[:, :, :, WANTED_BANDS]
+                    X = np.concatenate((X, x_i))
+                    y_i = np.array(f["labels"][()])
+                    y = np.concatenate((y, y_i))
+
+                    bounds_i = np.array(f["bounds"][()])
+                    bounds = np.concatenate((bounds, bounds_i))
+            if balance_dataset:
+                #since y = 1 is always less
+                n= y[y==1].shape[0]
+                mask = np.hstack([np.random.choice(np.where(y == l)[0], n, replace=False)
+                                  for l in np.unique(y)])
+                X = X[mask]
+                y = y[mask]
+                bounds = bounds[mask]
+    if preprocess:
+        X = preprocess_input(X)  
     if verbose:
         print("x shape: ", X.shape)
         print("y shape: ", y.shape)
@@ -219,7 +228,7 @@ def make_model(weights="imagenet",
     return model
 
 
-# In[15]:
+# In[35]:
 
 
 def train_model(model, 
@@ -230,9 +239,10 @@ def train_model(model,
                 trial_name, 
                 epochs=20,
                 batch_size=64,
-                multiprocessing=True, 
+                multiprocessing=False, 
                 early_stopping=True, 
-                save_history=True):
+                save_history=True, 
+                datagen=None):
     
     callbacks = []
     
@@ -246,8 +256,15 @@ def train_model(model,
                                   mode='max',
                                   save_best_only=False)
     callbacks.append(checkpoint)                        
-    
-    history = model.fit(x=X_train,
+    if datagen != None:
+        history = model.fit(datagen.flow(X_train, y_train, batch_size=batch_size),
+                        validation_data=(X_val, y_val), 
+                        steps_per_epoch=len(X_train) // batch_size,
+                        use_multiprocessing=multiprocessing, 
+                        epochs=epochs, 
+                        callbacks=callbacks)
+    else: 
+        history = model.fit(x=X_train,
                         y=y_train,
                         epochs=epochs, 
                         batch_size=batch_size, 
@@ -287,7 +304,7 @@ def graph_model_performance(history):
     plt.clf()
 
 
-# In[28]:
+# In[13]:
 
 
 def print_images(x, name):
@@ -340,27 +357,66 @@ def evaluate_model(model, X_train, X_val, X_test, y_train, y_val, y_test, thresh
     evaluate_dataset(model, X_test, y_test, threshold=threshold, pictures=pictures, dataset_type="test")
 
 
-# In[14]:
+# In[33]:
+
+
+def Augment_data():
+    datagen = keras.preprocessing.image.ImageDataGenerator(
+        horizontal_flip=True,
+        vertical_flip=True
+    )
+    return datagen
+
+
+# In[28]:
 
 
 X, y, bounds = load_data_from_h5()
 
 
-# In[18]:
+# In[29]:
 
 
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2)
+
+
+# In[30]:
+
+
+datagen = Augment_data()
+
+
+# In[31]:
+
+
 model = make_model()
-model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_4_epoch_35", epochs=35, save_history=True)
 
 
-# In[19]:
+# In[36]:
+
+
+# model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_4_epoch_35", epochs=35, save_history=True)
+model, history = train_model(model, 
+                             X_train, 
+                             y_train, 
+                             X_val, 
+                             y_val, 
+                             "trial_6_epoch_55", 
+                             epochs=55, 
+                             batch_size=64,
+                             save_history=True,
+                             early_stopping=False, 
+                             multiprocessing=False,
+                             datagen=Augment_data())
+
+
+# In[23]:
 
 
 graph_model_performance(history.history)
 
 
-# In[29]:
+# In[24]:
 
 
 evaluate_model(model, X_train, X_val, X_test, y_train, y_val, y_test)
