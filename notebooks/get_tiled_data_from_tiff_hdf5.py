@@ -54,7 +54,7 @@ drive = GoogleDrive(gauth)
 # In[3]:
 
 
-local_testing_mode = False
+local_testing_mode = True
 
 # set params
 tile_height, tile_length = (64, 64)
@@ -64,7 +64,7 @@ download_all_first = not local_testing_mode
 offset_px = 20
 offset_configs = [(0, 0), (offset_px, 0), (0, offset_px), (offset_px, offset_px)]
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/final_tiles/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/final_tiles_indices/'
 composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
 
 if local_testing_mode:
@@ -186,13 +186,15 @@ def save_current_file(save_index, counter):
     bounds_dset = f.create_dataset("bounds", data=tile_bounds[:counter])
     examples_dset = f.create_dataset("images", data=examples[:counter])
     labels_dset = f.create_dataset("labels", data=labels[:counter])
+    indices_dset = f.create_dataset("indices", data=tile_indices[:counter])
     f.close()
     return save_index + 1, 0
 
-def add_example(ex_data, ex_bounds, save_index, counter, is_positive):
+def add_example(ex_data, ex_bounds, t_global_indices, save_index, counter, is_positive):
     tile_bounds[counter] = ex_bounds
     examples[counter] = ex_data
     labels[counter] = 1 if is_positive else 0
+    tile_indices[counter] = t_global_indices
     new_counter = counter + 1
     
     if new_counter == examples_per_save_file:
@@ -229,9 +231,10 @@ test_ex_bounds = []
 
 save_index, counter = 0, 0
 
-tile_bounds = np.zeros([examples_per_save_file, 4])
+tile_bounds = np.zeros([examples_per_save_file, 4]) # [left, bottom, right, top]
 examples = np.zeros([examples_per_save_file, len(all_bands), tile_height, tile_length])
 labels = np.zeros([examples_per_save_file, 1])
+tile_indices = np.zeros([examples_per_save_file, 3]) # [row, col, offset_index]
 
 
 # In[15]:
@@ -240,22 +243,32 @@ labels = np.zeros([examples_per_save_file, 1])
 if local_testing_mode:
     file_list = file_list[:1]
 
+std_tile_rows, std_tile_cols = None, None
+    
 total_start_time = time.time()
 for index, file in enumerate(file_list):
     file_start_time = time.time()
     print("Starting file " + file['title'])
+    
+    # get composite image indices
+    c_row = int(index / num_image_rows)
+    c_col = index % num_image_rows
+    
     composite_file_path = composite_save_path + file['title']
     if not path.exists(composite_file_path):
         print("Downloading file...")
         # download the file
         download_file = drive.CreateFile({'id': file['id']})
         file.GetContentFile(composite_file_path)
-        
     dataset = rasterio.open(composite_file_path)
-
+    
     for offset_index, offset_config in enumerate(offset_configs):
         num_rows = int((dataset.height - offset_config[0]) / tile_height)
         num_cols = int((dataset.width - offset_config[1]) / tile_length)
+        
+        if std_tile_rows is None:
+            std_tile_rows = num_rows
+            std_tile_cols = num_cols
         
         # first pass to calculate kiln_tiles
         kiln_tiles = []
@@ -294,7 +307,11 @@ for index, file in enumerate(file_list):
                 # (2b) tile is not a neighbor of a kiln
                 tile_is_drop = (tile_idx_row, tile_idx_col) in drop_tiles
                 if tile_has_kiln or (t_data is not None and not tile_is_drop):
-                    save_index, counter = add_example(t_data, t_bounds, save_index, counter, tile_has_kiln)
+                    t_global_row = c_row * std_tile_rows + tile_idx_row
+                    t_global_col = c_col * std_tile_cols + tile_idx_col
+                    t_global_indices = [t_global_row, t_global_col, offset_index]
+                    
+                    save_index, counter = add_example(t_data, t_bounds, t_global_indices, save_index, counter, tile_has_kiln)
                     
     # handle leftovers in a final file
     if index == len(file_list) - 1:
