@@ -8,7 +8,7 @@
 # jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
 
 
-# In[1]:
+# In[50]:
 
 
 import os
@@ -25,6 +25,7 @@ from os import path
 import h5py
 import geopy.distance
 from rasterio.windows import Window, bounds as r_bounds
+import random
 
 
 # In[2]:
@@ -51,10 +52,10 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[3]:
+# In[73]:
 
 
-local_testing_mode = True
+local_testing_mode = False
 
 # set params
 tile_height, tile_length = (64, 64)
@@ -63,12 +64,13 @@ composite_file_name = 'bangladesh_all_bands_final'
 download_all_first = not local_testing_mode
 offset_px = 20
 offset_configs = [(0, 0), (offset_px, 0), (0, offset_px), (offset_px, offset_px)]
+percent_neg_to_keep = 0.1
 
 save_path = '/atlas/u/mliu356/data/kiln-scaling/final_tiles_indices/'
 composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
 
 if local_testing_mode:
-    save_path = '../data/tiles_testing1/'
+    save_path = '../data/tiles_testing2/'
     composite_save_path = '../data/composites/'
 
 # resources
@@ -78,7 +80,7 @@ all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10',
 print(kilns.head())
 
 
-# In[4]:
+# In[18]:
 
 
 def mkdirs(names):
@@ -88,7 +90,7 @@ def mkdirs(names):
 mkdirs([save_path, composite_save_path])
 
 
-# In[5]:
+# In[69]:
 
 
 file_list = drive.ListFile({'q': "title contains '" + composite_file_name + "'"}).GetList()
@@ -219,7 +221,7 @@ def pretty_bounds(bounds):
     return [[bounds[0], bounds[1]], [bounds[2], bounds[1]], [bounds[2], bounds[3]], [bounds[0], bounds[3]], [bounds[0], bounds[1]]]
 
 
-# In[12]:
+# In[75]:
 
 
 ## testing variables
@@ -227,6 +229,7 @@ num_tiles_dropped = 0
 pos_examples_data = []
 pos_examples_bounds = []
 test_ex_data = []
+test_ex_indices = []
 test_ex_bounds = []
 
 save_index, counter = 0, 0
@@ -237,7 +240,7 @@ labels = np.zeros([examples_per_save_file, 1])
 tile_indices = np.zeros([examples_per_save_file, 3]) # [row, col, offset_index]
 
 
-# In[15]:
+# In[76]:
 
 
 if local_testing_mode:
@@ -251,8 +254,8 @@ for index, file in enumerate(file_list):
     print("Starting file " + file['title'])
     
     # get composite image indices
-    c_row = int(index / num_image_rows)
-    c_col = index % num_image_rows
+    c_row = int(index / num_image_cols)
+    c_col = index % num_image_cols
     
     composite_file_path = composite_save_path + file['title']
     if not path.exists(composite_file_path):
@@ -261,15 +264,15 @@ for index, file in enumerate(file_list):
         download_file = drive.CreateFile({'id': file['id']})
         file.GetContentFile(composite_file_path)
     dataset = rasterio.open(composite_file_path)
-    
+
     for offset_index, offset_config in enumerate(offset_configs):
         num_rows = int((dataset.height - offset_config[0]) / tile_height)
         num_cols = int((dataset.width - offset_config[1]) / tile_length)
-        
+
         if std_tile_rows is None:
             std_tile_rows = num_rows
             std_tile_cols = num_cols
-        
+
         # first pass to calculate kiln_tiles
         kiln_tiles = []
         for tile_idx_row in range(0, num_rows):
@@ -278,7 +281,7 @@ for index, file in enumerate(file_list):
                 px_col = tile_idx_col * tile_length + offset_config[1]
                 if get_tile_has_kiln(dataset, px_row, px_col):
                     kiln_tiles += [(tile_idx_row, tile_idx_col)]
-        
+
         # only calculate drop_tiles for first offset 
         # (for all other offsets, no negative examples are saved anyways)
         drop_tiles = []
@@ -300,25 +303,26 @@ for index, file in enumerate(file_list):
                 t_data, t_bounds = None, None
                 if tile_has_kiln or offset_index == 0:
                     t_data, t_bounds = get_tile_info_from_px(dataset, px_row, px_col, tile_has_kiln)
-                
+
                 # save data only if:
                 # (1) tile is a kiln OR
-                # (2a) t_data is not None (first offset and tile in country)
-                # (2b) tile is not a neighbor of a kiln
-                tile_is_drop = (tile_idx_row, tile_idx_col) in drop_tiles
+                # (2a) t_data is not None (first offset and tile in country) AND
+                # (2b) not a neighbor of a kiln AND
+                # (2c) in the random sample (10%)
+                tile_is_drop = (tile_idx_row, tile_idx_col) in drop_tiles or (random.random() > percent_neg_to_keep)
                 if tile_has_kiln or (t_data is not None and not tile_is_drop):
                     t_global_row = c_row * std_tile_rows + tile_idx_row
                     t_global_col = c_col * std_tile_cols + tile_idx_col
                     t_global_indices = [t_global_row, t_global_col, offset_index]
-                    
+
                     save_index, counter = add_example(t_data, t_bounds, t_global_indices, save_index, counter, tile_has_kiln)
                     
     # handle leftovers in a final file
     if index == len(file_list) - 1:
         save_current_file(save_index, counter)
 
-    print("Total tiles dropped (outside country):", num_tiles_dropped)
-    print("Total tiles kept:", str(num_rows * num_cols * len(offset_configs) - num_tiles_dropped))
+#     print("Total tiles dropped (outside country):", num_tiles_dropped)
+#     print("Total tiles kept:", str(num_rows * num_cols * len(offset_configs) - num_tiles_dropped))
     num_tiles_dropped = 0
     print("Finished file in", time.time() - file_start_time, "\n")
 print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - total_start_time))
@@ -332,14 +336,14 @@ print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - tota
 print(pretty_bounds([dataset.bounds.left, dataset.bounds.bottom, dataset.bounds.right, dataset.bounds.top]))
 
 
-# In[119]:
+# In[68]:
 
 
-# print(len(pos_examples_bounds))
-# vis_index = 2
+print(len(test_ex_data))
+vis_index = 83
 
-# visualize_tile(pos_examples_data[vis_index])
-# pretty_bounds(pos_examples_bounds[vis_index])
+visualize_tile(test_ex_data[vis_index])
+print(test_ex_indices[vis_index])
 
 
 # In[27]:
