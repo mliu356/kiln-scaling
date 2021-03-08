@@ -60,18 +60,19 @@ local_testing_mode = False
 # set params
 tile_height, tile_length = (64, 64)
 examples_per_save_file = 1000
-composite_file_name = 'bangladesh_all_bands_final'
+composite_file_name = 'Bangladesh_images_2019-2020_all_bands_scale_10'
 download_all_first = not local_testing_mode
 offset_px = 20
 offset_configs = [(0, 0), (offset_px, 0), (0, offset_px), (offset_px, offset_px)]
 percent_neg_to_keep = 0.1
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/final_tiles_indices/'
-composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/bangladesh_2019-2020/'
+# composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/' # bangladesh, 2018-19
+composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/bangladesh_composites_2019_2020/' # india
 
 if local_testing_mode:
-    save_path = '../data/tiles_testing2/'
-    composite_save_path = '../data/composites/'
+    save_path = '../data/test/'
+    composite_save_path = '../data/bangladesh_composites_2019_2020/'
 
 # resources
 kilns = pd.read_csv("../data/bangladesh_kilns.csv")
@@ -104,10 +105,10 @@ for file in file_list[:5]:
 
 
 # calculate image grid
-first_x_coord = file_list[0]['title'].split(".")[0].split("-")[1]
-first_y_coord = file_list[0]['title'].split(".")[0].split("-")[2]
-num_image_cols = len([x for x in file_list if x['title'].split(".")[0].split("-")[1] == first_x_coord])
-num_image_rows = len([x for x in file_list if x['title'].split(".")[0].split("-")[2] == first_y_coord])
+first_x_coord = file_list[0]['title'].split(".")[0].split("-")[2]
+first_y_coord = file_list[0]['title'].split(".")[0].split("-")[3]
+num_image_cols = len([x for x in file_list if x['title'].split(".")[0].split("-")[2] == first_x_coord])
+num_image_rows = len([x for x in file_list if x['title'].split(".")[0].split("-")[3] == first_y_coord])
 print("Number of image grid columns:", num_image_cols)
 print("Number of image grid rows:", num_image_rows)
 
@@ -204,7 +205,7 @@ def add_example(ex_data, ex_bounds, t_global_indices, save_index, counter, is_po
     return save_index, new_counter
 
 
-# In[11]:
+# In[9]:
 
 
 ## testing & visualization methods
@@ -330,20 +331,32 @@ print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - tota
 
 # ## Test hdf5 file data format & visualizations
 
+# In[18]:
+
+
+# import h5py
+# import numpy as np
+# from matplotlib import pyplot as plt
+# f = h5py.File('/atlas/u/mhelabd/data/kiln-scaling/balanced_tiles/final_tiles_drop_neighbors.hdf5')
+# print(len(f['images']))
+# print(f['images'][0])
+# print(visualize_tile(f['images'][0]))
+
+
 # In[83]:
 
 
-print(pretty_bounds([dataset.bounds.left, dataset.bounds.bottom, dataset.bounds.right, dataset.bounds.top]))
+# print(pretty_bounds([dataset.bounds.left, dataset.bounds.bottom, dataset.bounds.right, dataset.bounds.top]))
 
 
 # In[68]:
 
 
-print(len(test_ex_data))
-vis_index = 83
+# print(len(test_ex_data))
+# vis_index = 83
 
-visualize_tile(test_ex_data[vis_index])
-print(test_ex_indices[vis_index])
+# visualize_tile(test_ex_data[vis_index])
+# print(test_ex_indices[vis_index])
 
 
 # In[27]:
