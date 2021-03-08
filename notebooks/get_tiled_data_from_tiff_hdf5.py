@@ -8,7 +8,7 @@
 # jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
 
 
-# In[50]:
+# In[1]:
 
 
 import os
@@ -52,7 +52,7 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[73]:
+# In[3]:
 
 
 local_testing_mode = False
@@ -60,19 +60,19 @@ local_testing_mode = False
 # set params
 tile_height, tile_length = (64, 64)
 examples_per_save_file = 1000
-composite_file_name = 'Bangladesh_images_2019-2020_all_bands_scale_10'
+composite_file_name = 'Bangladesh_images_2020-2021_all_bands_scale_10'
 download_all_first = not local_testing_mode
 offset_px = 20
 offset_configs = [(0, 0), (offset_px, 0), (0, offset_px), (offset_px, offset_px)]
 percent_neg_to_keep = 0.1
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/bangladesh_2019-2020/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/bangladesh_2020-2021/'
 # composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/' # bangladesh, 2018-19
-composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/bangladesh_composites_2019_2020/' # india
+composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/bangladesh_composites_2020_2021/' # new bangladesh
 
 if local_testing_mode:
     save_path = '../data/test/'
-    composite_save_path = '../data/bangladesh_composites_2019_2020/'
+    composite_save_path = '../data/bangladesh_composites_2020_2021/'
 
 # resources
 kilns = pd.read_csv("../data/bangladesh_kilns.csv")
@@ -81,7 +81,7 @@ all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10',
 print(kilns.head())
 
 
-# In[18]:
+# In[4]:
 
 
 def mkdirs(names):
@@ -91,7 +91,7 @@ def mkdirs(names):
 mkdirs([save_path, composite_save_path])
 
 
-# In[69]:
+# In[5]:
 
 
 file_list = drive.ListFile({'q': "title contains '" + composite_file_name + "'"}).GetList()
@@ -101,10 +101,14 @@ for file in file_list[:5]:
   print('title: %s, id: %s' % (file['title'], file['id']))
 
 
-# In[6]:
+# In[21]:
 
 
 # calculate image grid
+if file_list[0]['title'] == composite_file_name:
+    file_list = file_list[1:]
+
+print(file_list[0]['title'].split(".")[0])
 first_x_coord = file_list[0]['title'].split(".")[0].split("-")[2]
 first_y_coord = file_list[0]['title'].split(".")[0].split("-")[3]
 num_image_cols = len([x for x in file_list if x['title'].split(".")[0].split("-")[2] == first_x_coord])
@@ -113,7 +117,7 @@ print("Number of image grid columns:", num_image_cols)
 print("Number of image grid rows:", num_image_rows)
 
 
-# In[7]:
+# In[22]:
 
 
 coords = []
@@ -133,7 +137,7 @@ flat_coords += [flat_coords[0]]
 bangladesh_geo = Polygon(flat_coords)
 
 
-# In[8]:
+# In[23]:
 
 
 # optional pre-download all files
