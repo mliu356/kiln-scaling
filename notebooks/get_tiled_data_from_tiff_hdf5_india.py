@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[4]:
+# In[2]:
 
 
 # !pip install pandas
 # jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
 
 
-# In[37]:
+# In[3]:
 
 
 import os
@@ -28,7 +28,7 @@ from rasterio.windows import Window, bounds as r_bounds
 import random
 
 
-# In[38]:
+# In[4]:
 
 
 from pydrive.auth import GoogleAuth
@@ -52,7 +52,7 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[51]:
+# In[17]:
 
 
 local_testing_mode = True
@@ -60,29 +60,28 @@ local_testing_mode = True
 # set params
 tile_height, tile_length = (64, 64)
 examples_per_save_file = 1000
-composite_file_name = 'Bangladesh_images_2020-2021_actual_all_bands_scale_10'
+composite_file_name = 'India_all_bands_final'
 download_all_first = not local_testing_mode
 offset_px = 20
-offset_configs = [(0, 0), (offset_px, 0), (0, offset_px), (offset_px, offset_px)]
+offset_configs = [(0, 0)]
 percent_neg_to_keep = 0.1
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/bangladesh_2020_2021/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/india_tiles/'
 # composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/' # bangladesh, 2018-19
-composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/bangladesh_composites_2020_2021/' # new bangladesh
+composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/india_composites/' # new bangladesh
 
 if local_testing_mode:
-    save_path = '../data/test/'
-    composite_save_path = '../data/bangladesh_composites_2020_2021/'
+    save_path = '../data/tiles_testing3/'
+    composite_save_path = '../data/india_composites/'
 
 # resources
-# kilns = pd.read_csv("../data/india_bihar_kilns.csv")
-kilns = pd.read_csv("../data/bangladesh_kilns.csv")
+kilns = pd.read_csv("../data/india_bihar_kilns.csv")
 all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10', 'B11', 'B12']
 
 print(kilns.head())
 
 
-# In[40]:
+# In[19]:
 
 
 def mkdirs(names):
@@ -92,7 +91,7 @@ def mkdirs(names):
 mkdirs([save_path, composite_save_path])
 
 
-# In[41]:
+# In[7]:
 
 
 file_list = drive.ListFile({'q': "title contains '" + composite_file_name + "'"}).GetList()
@@ -102,7 +101,7 @@ for file in file_list[:5]:
   print('title: %s, id: %s' % (file['title'], file['id']))
 
 
-# In[43]:
+# In[8]:
 
 
 # calculate image grid
@@ -118,7 +117,7 @@ print("Number of image grid columns:", num_image_cols)
 print("Number of image grid rows:", num_image_rows)
 
 
-# In[46]:
+# In[9]:
 
 
 coords = []
@@ -139,7 +138,7 @@ bangladesh_geo = Polygon(flat_coords)
 # print(bangladesh_geo)
 
 
-# In[47]:
+# In[10]:
 
 
 # optional pre-download all files
@@ -158,7 +157,7 @@ if download_all_first:
     print("Done downloading all files.")
 
 
-# In[48]:
+# In[11]:
 
 
 def get_tile_info_from_px(dataset, px_row, px_col, has_kiln):
@@ -185,7 +184,7 @@ def get_tile_has_kiln(dataset, px_row, px_col):
     return len(kilns_in_image) >= 1
 
 
-# In[13]:
+# In[12]:
 
 
 def save_current_file(save_index, counter):
@@ -202,7 +201,7 @@ def save_current_file(save_index, counter):
 def add_example(ex_data, ex_bounds, t_global_indices, save_index, counter, is_positive):
     tile_bounds[counter] = ex_bounds
     examples[counter] = ex_data
-    labels[counter] = 1 if is_positive else 0
+    labels[counter] = 1 if is_positive else -1
     tile_indices[counter] = t_global_indices
     new_counter = counter + 1
     
@@ -211,7 +210,7 @@ def add_example(ex_data, ex_bounds, t_global_indices, save_index, counter, is_po
     return save_index, new_counter
 
 
-# In[14]:
+# In[13]:
 
 
 ## testing & visualization methods
@@ -228,7 +227,7 @@ def pretty_bounds(bounds):
     return [[bounds[0], bounds[1]], [bounds[2], bounds[1]], [bounds[2], bounds[3]], [bounds[0], bounds[3]], [bounds[0], bounds[1]]]
 
 
-# In[15]:
+# In[14]:
 
 
 ## testing variables
@@ -247,7 +246,7 @@ labels = np.zeros([examples_per_save_file, 1])
 tile_indices = np.zeros([examples_per_save_file, 3]) # [row, col, offset_index]
 
 
-# In[25]:
+# In[15]:
 
 
 # print(composite_file_path)
@@ -262,7 +261,7 @@ tile_indices = np.zeros([examples_per_save_file, 3]) # [row, col, offset_index]
 # print(bands2.shape)
 
 
-# In[50]:
+# In[20]:
 
 
 if local_testing_mode:
@@ -303,18 +302,6 @@ for index, file in enumerate(file_list):
                 px_col = tile_idx_col * tile_length + offset_config[1]
                 if get_tile_has_kiln(dataset, px_row, px_col):
                     kiln_tiles += [(tile_idx_row, tile_idx_col)]
-
-        # only calculate drop_tiles for first offset 
-        # (for all other offsets, no negative examples are saved anyways)
-        drop_tiles = []
-        if offset_index == 0:
-            for row_index, col_index in kiln_tiles:
-                neighbors = [(row_index - 1, col_index - 1), (row_index, col_index - 1), (row_index + 1, col_index - 1), 
-                             (row_index - 1, col_index), (row_index + 1, col_index), 
-                             (row_index - 1, col_index + 1), (row_index, col_index + 1), (row_index + 1, col_index + 1)]
-                for n in neighbors:
-                    if n not in kiln_tiles and n[0] >= 0 and n[0] < num_rows and n[1] >= 0 and n[1] < num_cols:
-                        drop_tiles += [n]
         
         # second pass to calculate and save data
         for tile_idx_row in range(0, num_rows):
@@ -322,17 +309,13 @@ for index, file in enumerate(file_list):
             for tile_idx_col in range(0, num_cols):
                 px_col = tile_idx_col * tile_length + offset_config[1]
                 tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
-                t_data, t_bounds = None, None
-                if tile_has_kiln or offset_index == 0:
-                    t_data, t_bounds = get_tile_info_from_px(dataset, px_row, px_col, tile_has_kiln)
+                t_data, t_bounds = get_tile_info_from_px(dataset, px_row, px_col, tile_has_kiln)
 
                 # save data only if:
-                # (1) tile is a kiln OR
-                # (2a) t_data is not None (first offset and tile in country) AND
-                # (2b) not a neighbor of a kiln AND
-                # (2c) in the random sample (10%)
-                tile_is_drop = (tile_idx_row, tile_idx_col) in drop_tiles or (random.random() > percent_neg_to_keep)
-                if tile_has_kiln or (t_data is not None and not tile_is_drop):
+                # (1) t_data is not None AND
+                # (2a) tile contains kiln OR
+                # (2b) tile is in the random negative sample (percent_neg_to_keep)
+                if t_data is not None and (tile_has_kiln or random.random() > percent_neg_to_keep):
                     t_global_row = c_row * std_tile_rows + tile_idx_row
                     t_global_col = c_col * std_tile_cols + tile_idx_col
                     t_global_indices = [t_global_row, t_global_col, offset_index]
