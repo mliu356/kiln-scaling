@@ -5,7 +5,7 @@
 
 
 # !pip install pandas
-# jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
+# jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5_india.ipynb
 
 
 # In[3]:
@@ -64,7 +64,7 @@ composite_file_name = 'India_all_bands_final'
 download_all_first = not local_testing_mode
 offset_px = 20
 offset_configs = [(0, 0)]
-percent_neg_to_keep = 0.1
+percent_neg_to_keep = 0.005
 
 save_path = '/atlas/u/mliu356/data/kiln-scaling/india_tiles/'
 # composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/' # bangladesh, 2018-19
