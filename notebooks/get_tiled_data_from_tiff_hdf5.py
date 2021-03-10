@@ -8,7 +8,7 @@
 # jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5.ipynb
 
 
-# In[37]:
+# In[1]:
 
 
 import os
@@ -55,7 +55,7 @@ drive = GoogleDrive(gauth)
 # In[51]:
 
 
-local_testing_mode = True
+local_testing_mode = False
 
 # set params
 tile_height, tile_length = (64, 64)
@@ -179,8 +179,8 @@ def get_tile_info_from_px(dataset, px_row, px_col, has_kiln):
 def get_tile_has_kiln(dataset, px_row, px_col):
     window = Window(px_col, px_row, tile_length, tile_height)
     bounds = list(r_bounds(window, dataset.transform))
-    kilns_in_image = kilns.loc[(kilns['Latitude'] >= bounds[1]) & (kilns['Latitude'] <= bounds[3]) 
-        & (kilns['Longitude'] >= bounds[0]) & (kilns['Longitude'] <= bounds[2])]
+    kilns_in_image = kilns.loc[(kilns['lat'] >= bounds[1]) & (kilns['lat'] <= bounds[3]) 
+        & (kilns['lon'] >= bounds[0]) & (kilns['lon'] <= bounds[2])]
 
     return len(kilns_in_image) >= 1
 

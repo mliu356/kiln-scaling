@@ -55,7 +55,7 @@ drive = GoogleDrive(gauth)
 # In[17]:
 
 
-local_testing_mode = True
+local_testing_mode = False
 
 # set params
 tile_height, tile_length = (64, 64)
@@ -105,9 +105,6 @@ for file in file_list[:5]:
 
 
 # calculate image grid
-if file_list[0]['title'] == composite_file_name:
-    file_list = file_list[1:]
-
 print(file_list[0]['title'].split(".")[0])
 first_x_coord = file_list[0]['title'].split(".")[0].split("-")[1]
 first_y_coord = file_list[0]['title'].split(".")[0].split("-")[2]
