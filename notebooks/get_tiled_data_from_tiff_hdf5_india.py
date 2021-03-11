@@ -26,6 +26,7 @@ import h5py
 import geopy.distance
 from rasterio.windows import Window, bounds as r_bounds
 import random
+import fnmatch
 
 
 # In[4]:
@@ -61,7 +62,8 @@ local_testing_mode = False
 tile_height, tile_length = (64, 64)
 examples_per_save_file = 1000
 composite_file_name = 'India_all_bands_final'
-download_all_first = not local_testing_mode
+# download_all_first = not local_testing_mode
+download_all_first = False
 offset_px = 20
 offset_configs = [(0, 0)]
 percent_neg_to_keep = 0.005
@@ -139,9 +141,10 @@ bangladesh_geo = Polygon(flat_coords)
 
 
 # optional pre-download all files
+
 if download_all_first:
     for file in file_list:
-        start_time = time.time()
+#         start_time = time.time()
         composite_file_path = composite_save_path + file['title']
         if path.exists(composite_file_path):
             print("File already downloaded.", composite_file_path)
@@ -150,7 +153,7 @@ if download_all_first:
             # download the file
             download_file = drive.CreateFile({'id': file['id']})
             file.GetContentFile(composite_file_path)
-            print("Finished file in " + str(time.time() - start_time))
+#             print("Finished file in " + str(time.time() - start_time))
     print("Done downloading all files.")
 
 
@@ -224,7 +227,7 @@ def pretty_bounds(bounds):
     return [[bounds[0], bounds[1]], [bounds[2], bounds[1]], [bounds[2], bounds[3]], [bounds[0], bounds[3]], [bounds[0], bounds[1]]]
 
 
-# In[14]:
+# In[8]:
 
 
 ## testing variables
@@ -236,11 +239,17 @@ test_ex_indices = []
 test_ex_bounds = []
 
 save_index, counter = 0, 0
+prev_ex_files = os.listdir(save_path)
+while ("examples_{}.hdf5".format(save_index) in prev_ex_files):
+    save_index += 1
+    next_file_name = "examples_" + str(save_index) + ".hdf5"
 
 tile_bounds = np.zeros([examples_per_save_file, 4]) # [left, bottom, right, top]
 examples = np.zeros([examples_per_save_file, len(all_bands), tile_height, tile_length])
 labels = np.zeros([examples_per_save_file, 1])
 tile_indices = np.zeros([examples_per_save_file, 3]) # [row, col, offset_index]
+
+last_file_completed = None
 
 
 # In[15]:
@@ -268,57 +277,61 @@ std_tile_rows, std_tile_cols = None, None
     
 total_start_time = time.time()
 for index, file in enumerate(file_list):
-    file_start_time = time.time()
-    print("Starting file " + file['title'])
+    if (last_file_completed == None or file['title'] > last_file_completed):
+
+        file_start_time = time.time()
+        print("Starting file " + file['title'])
+
+        # get composite image indices
+        c_row = int(index / num_image_cols)
+        c_col = index % num_image_cols
+
+        composite_file_path = composite_save_path + file['title']
+        if not path.exists(composite_file_path):
+            print("Downloading file...")
+            # download the file
+            download_file = drive.CreateFile({'id': file['id']})
+            file.GetContentFile(composite_file_path)
+        dataset = rasterio.open(composite_file_path)
+
+        for offset_index, offset_config in enumerate(offset_configs):
+            num_rows = int((dataset.height - offset_config[0]) / tile_height)
+            num_cols = int((dataset.width - offset_config[1]) / tile_length)
+
+            if std_tile_rows is None:
+                std_tile_rows = num_rows
+                std_tile_cols = num_cols
+
+            # first pass to calculate kiln_tiles
+            kiln_tiles = []
+            for tile_idx_row in range(0, num_rows):
+                px_row = tile_idx_row * tile_height + offset_config[0]
+                for tile_idx_col in range(0, num_cols):
+                    px_col = tile_idx_col * tile_length + offset_config[1]
+                    if get_tile_has_kiln(dataset, px_row, px_col):
+                        kiln_tiles += [(tile_idx_row, tile_idx_col)]
+
+            # second pass to calculate and save data
+            for tile_idx_row in range(0, num_rows):
+                px_row = tile_idx_row * tile_height + offset_config[0]
+                for tile_idx_col in range(0, num_cols):
+                    px_col = tile_idx_col * tile_length + offset_config[1]
+                    tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
+                    t_data, t_bounds = get_tile_info_from_px(dataset, px_row, px_col, tile_has_kiln)
+
+                    # save data only if:
+                    # (1) t_data is not None AND
+                    # (2a) tile contains kiln OR
+                    # (2b) tile is in the random negative sample (percent_neg_to_keep)
+                    if t_data is not None and (tile_has_kiln or random.random() > percent_neg_to_keep):
+                        t_global_row = c_row * std_tile_rows + tile_idx_row
+                        t_global_col = c_col * std_tile_cols + tile_idx_col
+                        t_global_indices = [t_global_row, t_global_col, offset_index]
+
+                        save_index, counter = add_example(t_data, t_bounds, t_global_indices, save_index, counter, tile_has_kiln)
+
+        last_file_completed = file['title']
     
-    # get composite image indices
-    c_row = int(index / num_image_cols)
-    c_col = index % num_image_cols
-    
-    composite_file_path = composite_save_path + file['title']
-    if not path.exists(composite_file_path):
-        print("Downloading file...")
-        # download the file
-        download_file = drive.CreateFile({'id': file['id']})
-        file.GetContentFile(composite_file_path)
-    dataset = rasterio.open(composite_file_path)
-
-    for offset_index, offset_config in enumerate(offset_configs):
-        num_rows = int((dataset.height - offset_config[0]) / tile_height)
-        num_cols = int((dataset.width - offset_config[1]) / tile_length)
-
-        if std_tile_rows is None:
-            std_tile_rows = num_rows
-            std_tile_cols = num_cols
-
-        # first pass to calculate kiln_tiles
-        kiln_tiles = []
-        for tile_idx_row in range(0, num_rows):
-            px_row = tile_idx_row * tile_height + offset_config[0]
-            for tile_idx_col in range(0, num_cols):
-                px_col = tile_idx_col * tile_length + offset_config[1]
-                if get_tile_has_kiln(dataset, px_row, px_col):
-                    kiln_tiles += [(tile_idx_row, tile_idx_col)]
-        
-        # second pass to calculate and save data
-        for tile_idx_row in range(0, num_rows):
-            px_row = tile_idx_row * tile_height + offset_config[0]
-            for tile_idx_col in range(0, num_cols):
-                px_col = tile_idx_col * tile_length + offset_config[1]
-                tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
-                t_data, t_bounds = get_tile_info_from_px(dataset, px_row, px_col, tile_has_kiln)
-
-                # save data only if:
-                # (1) t_data is not None AND
-                # (2a) tile contains kiln OR
-                # (2b) tile is in the random negative sample (percent_neg_to_keep)
-                if t_data is not None and (tile_has_kiln or random.random() > percent_neg_to_keep):
-                    t_global_row = c_row * std_tile_rows + tile_idx_row
-                    t_global_col = c_col * std_tile_cols + tile_idx_col
-                    t_global_indices = [t_global_row, t_global_col, offset_index]
-
-                    save_index, counter = add_example(t_data, t_bounds, t_global_indices, save_index, counter, tile_has_kiln)
-                    
     # handle leftovers in a final file
     if index == len(file_list) - 1:
         save_current_file(save_index, counter)
