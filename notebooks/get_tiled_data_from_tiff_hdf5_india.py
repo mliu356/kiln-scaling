@@ -8,7 +8,7 @@
 # jupyter nbconvert --to script get_tiled_data_from_tiff_hdf5_india.ipynb
 
 
-# In[3]:
+# In[1]:
 
 
 import os
@@ -29,7 +29,7 @@ import random
 import fnmatch
 
 
-# In[4]:
+# In[2]:
 
 
 from pydrive.auth import GoogleAuth
@@ -53,10 +53,10 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[17]:
+# In[4]:
 
 
-local_testing_mode = False
+local_testing_mode = True
 
 # set params
 tile_height, tile_length = (64, 64)
@@ -73,7 +73,7 @@ save_path = '/atlas/u/mliu356/data/kiln-scaling/india_tiles/'
 composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/india_composites/' # new bangladesh
 
 if local_testing_mode:
-    save_path = '../data/tiles_testing3/'
+    save_path = '../data/tiles_testing4/'
     composite_save_path = '../data/india_composites/'
 
 # resources
@@ -83,7 +83,13 @@ all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10',
 print(kilns.head())
 
 
-# In[19]:
+# In[ ]:
+
+
+
+
+
+# In[5]:
 
 
 def mkdirs(names):
@@ -93,7 +99,7 @@ def mkdirs(names):
 mkdirs([save_path, composite_save_path])
 
 
-# In[7]:
+# In[57]:
 
 
 file_list = drive.ListFile({'q': "title contains '" + composite_file_name + "'"}).GetList()
@@ -103,7 +109,7 @@ for file in file_list[:5]:
   print('title: %s, id: %s' % (file['title'], file['id']))
 
 
-# In[8]:
+# In[7]:
 
 
 # calculate image grid
@@ -116,7 +122,7 @@ print("Number of image grid columns:", num_image_cols)
 print("Number of image grid rows:", num_image_rows)
 
 
-# In[9]:
+# In[24]:
 
 
 coords = []
@@ -135,9 +141,10 @@ for sublist in coords:
 flat_coords += [flat_coords[0]]
 bangladesh_geo = Polygon(flat_coords)
 # print(bangladesh_geo)
+print(pretty_bounds(bangladesh_geo.bounds))
 
 
-# In[10]:
+# In[9]:
 
 
 # optional pre-download all files
@@ -157,7 +164,7 @@ if download_all_first:
     print("Done downloading all files.")
 
 
-# In[11]:
+# In[26]:
 
 
 def get_tile_info_from_px(dataset, px_row, px_col, has_kiln):
@@ -184,7 +191,7 @@ def get_tile_has_kiln(dataset, px_row, px_col):
     return len(kilns_in_image) >= 1
 
 
-# In[12]:
+# In[11]:
 
 
 def save_current_file(save_index, counter):
@@ -210,7 +217,7 @@ def add_example(ex_data, ex_bounds, t_global_indices, save_index, counter, is_po
     return save_index, new_counter
 
 
-# In[13]:
+# In[12]:
 
 
 ## testing & visualization methods
@@ -227,7 +234,7 @@ def pretty_bounds(bounds):
     return [[bounds[0], bounds[1]], [bounds[2], bounds[1]], [bounds[2], bounds[3]], [bounds[0], bounds[3]], [bounds[0], bounds[1]]]
 
 
-# In[8]:
+# In[53]:
 
 
 ## testing variables
@@ -242,7 +249,6 @@ save_index, counter = 0, 0
 prev_ex_files = os.listdir(save_path)
 while ("examples_{}.hdf5".format(save_index) in prev_ex_files):
     save_index += 1
-    next_file_name = "examples_" + str(save_index) + ".hdf5"
 
 tile_bounds = np.zeros([examples_per_save_file, 4]) # [left, bottom, right, top]
 examples = np.zeros([examples_per_save_file, len(all_bands), tile_height, tile_length])
@@ -250,6 +256,11 @@ labels = np.zeros([examples_per_save_file, 1])
 tile_indices = np.zeros([examples_per_save_file, 3]) # [row, col, offset_index]
 
 last_file_completed = None
+
+test_bounds = []
+test_ex = []
+test_labels = []
+test_indices = []
 
 
 # In[15]:
@@ -267,18 +278,27 @@ last_file_completed = None
 # print(bands2.shape)
 
 
-# In[20]:
+# In[60]:
 
 
 if local_testing_mode:
-    file_list = file_list[:1]
+    file_list = file_list[10:]
+
+
+# In[ ]:
+
+
+
+
+
+# In[61]:
+
 
 std_tile_rows, std_tile_cols = None, None
     
 total_start_time = time.time()
 for index, file in enumerate(file_list):
     if (last_file_completed == None or file['title'] > last_file_completed):
-
         file_start_time = time.time()
         print("Starting file " + file['title'])
 
@@ -293,42 +313,51 @@ for index, file in enumerate(file_list):
             download_file = drive.CreateFile({'id': file['id']})
             file.GetContentFile(composite_file_path)
         dataset = rasterio.open(composite_file_path)
+        image_geo = Polygon(pretty_bounds(dataset.bounds))
+#         print("image bounds", pretty_bounds(dataset.bounds))
+    
+        if bangladesh_geo.intersects(image_geo):
+            for offset_index, offset_config in enumerate(offset_configs):
+                num_rows = int((dataset.height - offset_config[0]) / tile_height)
+                num_cols = int((dataset.width - offset_config[1]) / tile_length)
 
-        for offset_index, offset_config in enumerate(offset_configs):
-            num_rows = int((dataset.height - offset_config[0]) / tile_height)
-            num_cols = int((dataset.width - offset_config[1]) / tile_length)
+                if std_tile_rows is None:
+                    std_tile_rows = num_rows
+                    std_tile_cols = num_cols
 
-            if std_tile_rows is None:
-                std_tile_rows = num_rows
-                std_tile_cols = num_cols
+                # first pass to calculate kiln_tiles
+                kiln_tiles = []
+                for tile_idx_row in range(0, num_rows):
+                    px_row = tile_idx_row * tile_height + offset_config[0]
+                    for tile_idx_col in range(0, num_cols):
+                        px_col = tile_idx_col * tile_length + offset_config[1]
+                        if get_tile_has_kiln(dataset, px_row, px_col):
+                            kiln_tiles += [(tile_idx_row, tile_idx_col)]
 
-            # first pass to calculate kiln_tiles
-            kiln_tiles = []
-            for tile_idx_row in range(0, num_rows):
-                px_row = tile_idx_row * tile_height + offset_config[0]
-                for tile_idx_col in range(0, num_cols):
-                    px_col = tile_idx_col * tile_length + offset_config[1]
-                    if get_tile_has_kiln(dataset, px_row, px_col):
-                        kiln_tiles += [(tile_idx_row, tile_idx_col)]
+                # second pass to calculate and save data
+                for tile_idx_row in range(0, num_rows):
+                    px_row = tile_idx_row * tile_height + offset_config[0]
+                    for tile_idx_col in range(0, num_cols):
+                        px_col = tile_idx_col * tile_length + offset_config[1]
+                        tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
+                        t_data, t_bounds = get_tile_info_from_px(dataset, px_row, px_col, tile_has_kiln)
 
-            # second pass to calculate and save data
-            for tile_idx_row in range(0, num_rows):
-                px_row = tile_idx_row * tile_height + offset_config[0]
-                for tile_idx_col in range(0, num_cols):
-                    px_col = tile_idx_col * tile_length + offset_config[1]
-                    tile_has_kiln = (tile_idx_row, tile_idx_col) in kiln_tiles
-                    t_data, t_bounds = get_tile_info_from_px(dataset, px_row, px_col, tile_has_kiln)
+                        # save data only if:
+                        # (1) t_data is not None AND
+                        # (2a) tile contains kiln OR
+                        # (2b) tile is in the random negative sample (percent_neg_to_keep)
+                        if t_data is not None and not np.isnan(np.sum(t_data)) and (tile_has_kiln or random.random() > percent_neg_to_keep):
+                            t_global_row = c_row * std_tile_rows + tile_idx_row
+                            t_global_col = c_col * std_tile_cols + tile_idx_col
+                            t_global_indices = [t_global_row, t_global_col, offset_index]
+                            
+                            print(".")
 
-                    # save data only if:
-                    # (1) t_data is not None AND
-                    # (2a) tile contains kiln OR
-                    # (2b) tile is in the random negative sample (percent_neg_to_keep)
-                    if t_data is not None and (tile_has_kiln or random.random() > percent_neg_to_keep):
-                        t_global_row = c_row * std_tile_rows + tile_idx_row
-                        t_global_col = c_col * std_tile_cols + tile_idx_col
-                        t_global_indices = [t_global_row, t_global_col, offset_index]
-
-                        save_index, counter = add_example(t_data, t_bounds, t_global_indices, save_index, counter, tile_has_kiln)
+                            save_index, counter = add_example(t_data, t_bounds, t_global_indices, save_index, counter, tile_has_kiln)
+                            test_bounds += [t_bounds]
+                            test_ex += [t_data]
+                            test_labels += [tile_has_kiln]
+                            test_indices += [t_global_indices]
 
         last_file_completed = file['title']
     
@@ -341,6 +370,18 @@ for index, file in enumerate(file_list):
     num_tiles_dropped = 0
     print("Finished file in", time.time() - file_start_time, "\n")
 print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - total_start_time))
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
 
 
 # ## Test hdf5 file data format & visualizations
@@ -357,20 +398,23 @@ print("Finished " + str(len(file_list)) + " files in: " + str(time.time() - tota
 # print(visualize_tile(f['images'][0]))
 
 
-# In[83]:
+# In[22]:
 
 
-# print(pretty_bounds([dataset.bounds.left, dataset.bounds.bottom, dataset.bounds.right, dataset.bounds.top]))
+print(pretty_bounds([68.14332284439772, 35.489741929709936, 68.14907206221608, 35.4954911475283]))
 
 
-# In[68]:
+# In[40]:
 
 
-# print(len(test_ex_data))
-# vis_index = 83
+print(len(test_ex))
+vis_index = 8000
+print(test_ex[vis_index].shape)
+print(pretty_bounds(test_bounds[vis_index]))
+print(test_labels[vis_index])
 
-# visualize_tile(test_ex_data[vis_index])
-# print(test_ex_indices[vis_index])
+visualize_tile(test_ex[vis_index])
+print(test_indices[vis_index])
 
 
 # In[27]:
