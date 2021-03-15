@@ -56,25 +56,25 @@ drive = GoogleDrive(gauth)
 # In[4]:
 
 
-local_testing_mode = True
+local_testing_mode = False
 
 # set params
 tile_height, tile_length = (64, 64)
 examples_per_save_file = 1000
-composite_file_name = 'India_all_bands_final'
+composite_file_name = 'India_images_all_bands_scale_10_small_images'
 # download_all_first = not local_testing_mode
 download_all_first = False
 offset_px = 20
 offset_configs = [(0, 0)]
 percent_neg_to_keep = 0.005
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/india_tiles/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/india_tiles_from_small/'
 # composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/' # bangladesh, 2018-19
-composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/india_composites/' # new bangladesh
+composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/india_small_composites/' # new bangladesh
 
 if local_testing_mode:
-    save_path = '../data/tiles_testing4/'
-    composite_save_path = '../data/india_composites/'
+    save_path = '../data/tiles_testing5/'
+    composite_save_path = '../data/india_small_composites/'
 
 # resources
 kilns = pd.read_csv("../data/india_bihar_kilns.csv")
@@ -141,7 +141,7 @@ for sublist in coords:
 flat_coords += [flat_coords[0]]
 bangladesh_geo = Polygon(flat_coords)
 # print(bangladesh_geo)
-print(pretty_bounds(bangladesh_geo.bounds))
+# print(pretty_bounds(bangladesh_geo.bounds))
 
 
 # In[9]:
@@ -351,7 +351,7 @@ for index, file in enumerate(file_list):
                             t_global_col = c_col * std_tile_cols + tile_idx_col
                             t_global_indices = [t_global_row, t_global_col, offset_index]
                             
-                            print(".")
+#                             print(".")
 
                             save_index, counter = add_example(t_data, t_bounds, t_global_indices, save_index, counter, tile_has_kiln)
                             test_bounds += [t_bounds]
