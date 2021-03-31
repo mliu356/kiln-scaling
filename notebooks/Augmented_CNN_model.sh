@@ -1,13 +1,13 @@
 #!/bin/bash                                                                                                                                                                                                       \   #SBATCH --partition=tibet --qos=normal                                                                                                     \
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --time=06:00:00                                             \
-#SBATCH --nodes=4                                                                                                                                                                                              \
+#SBATCH --nodes=2                                                                                                                                                                                              \
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=128G
-# only use the following on partition with GPUs                                                                                                                                                                    #SBATCH --gres=gpu:1
+#SBATCH --mem=64G
+# only use the following on partition with GPUs                                                                                                                                                                   
 #SBATCH --job-name="sample"
 #SBATCH --output=sample-%j.out
-#SBATCH --mem-per-cpu=64G
+#SBATCH --mem-per-cpu=32G
 # only use the following if you want email notification                                                                                                                                                            ####SBATCH --mail-user=youremailaddress                                                                                                                                                                            ####SBATCH --mail-type=ALL
 
 # list out some useful information (optional)                                                                                                                                                                      echo "SLURM_JOBID="$SLURM_JOBID

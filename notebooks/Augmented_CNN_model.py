@@ -30,7 +30,7 @@ from sklearn.model_selection import train_test_split
 sys.argv[1] = "mhelabd"
 
 
-# In[3]:
+# In[39]:
 
 
 #Global Variables
@@ -39,7 +39,7 @@ IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, NUM_OG_BANDS = (64, 64, len(WANTED_BANDS),
 MODEL_NAME = "Augmented-drop-neighbors-CNN-({})-input-({}, {}, {})-bands-({})".format("Resnet50", IMAGE_HEIGHT, IMAGE_WIDTH, NUM_BANDS, str(WANTED_BANDS))
 PATH = "/atlas/u/{}/data/kiln-scaling/models/{}/".format(sys.argv[1], MODEL_NAME) 
 # DATA_PATH = "/atlas/u/mliu356/data/kiln-scaling/tiles_drop_neighbors/"
-DATA_PATH = "/atlas/u/mliu356/data/kiln-scaling/final_tiles/"
+DATA_PATH = "/atlas/u/mliu356/data/kiln-scaling/final_tiles_indices/"
 MODEL_WEIGHTS_PATH = PATH + "weights/"
 MODEL_HISTORY_PATH = PATH + "history/"
 MODEL_EVALUATION_PATH = PATH + "evaluation/"
@@ -64,11 +64,11 @@ def mkdirs(names):
 mkdirs([MODEL_WEIGHTS_PATH, MODEL_HISTORY_PATH, MODEL_EVALUATION_PATH, MODEL_EVALUATION_IMAGE_PATH])
 
 
-# In[5]:
+# In[37]:
 
 
 def save_h5_file(X, y, bounds):
-    filename = BALANCED_DATA_PATH + ("preprocessed_" if PREPROCESS else "") + "final_tiles.hdf5"
+    filename = BALANCED_DATA_PATH + ("preprocessed_" if PREPROCESS else "") + "final_tiles_drop_neighbors.hdf5"
     print("Saving file", filename)
     f = h5py.File(filename, 'w')
     bounds_dset = f.create_dataset("bounds", data=bounds)
@@ -95,32 +95,41 @@ def balance_and_save_h5_data(preprocess=False, verbose=VERBOSE):
 
                 bounds_i = np.array(f["bounds"][()])
                 bounds = np.concatenate((bounds, bounds_i))
-
-            n= y[y==1].shape[0]
-            mask = np.hstack([np.random.choice(np.where(y == l)[0], n, replace=False) for l in np.unique(y)])
-            X = X[mask]
-            y = y[mask]
-            bounds = bounds[mask]
+            try:
+                n= y[y==1].shape[0]
+                mask = np.hstack([np.random.choice(np.where(y == l)[0], n, replace=False) for l in np.unique(y)])
+                X = X[mask]
+                y = y[mask]
+                bounds = bounds[mask]
+            except:
+                print("file has more positive examples")
     print("X.shape: ", X.shape)
     print("y.shape: ", y.shape)
     print("bounds.shape: ", bounds.shape)
     save_h5_file(X, y, bounds)
+    return X, y, bounds
+
+
+# In[40]:
+
+
+X, y, bounds = balance_and_save_h5_data()
 
 
 # In[ ]:
 
 
-balance_and_save_h5_data()
 
 
-# In[7]:
+
+# In[41]:
 
 
 def load_data_from_h5(preprocess=PREPROCESS, verbose=VERBOSE,                       balance_dataset=BALANCE_DATASET, use_balanced_dataset=USE_BALANCED_DATASET):
     X, y = [], []
     data_path = BALANCED_DATA_PATH if use_balanced_dataset else DATA_PATH
     if use_balanced_dataset:
-        filename = "final_tiles.hdf5"
+        filename = "final_tiles_drop_neighbors.hdf5"
         with h5py.File(data_path + filename, "r") as f:
             print("extracting: ", filename) 
             X = np.array(f["images"][()])                .reshape((-1, NUM_OG_BANDS, IMAGE_HEIGHT, IMAGE_WIDTH))
@@ -161,7 +170,7 @@ def load_data_from_h5(preprocess=PREPROCESS, verbose=VERBOSE,                   
     return X, y, bounds
 
 
-# In[8]:
+# In[42]:
 
 
 def load_data_from_csv(preprocess=True, verbose=VERBOSE):
@@ -191,7 +200,7 @@ def load_data_from_csv(preprocess=True, verbose=VERBOSE):
     
 
 
-# In[9]:
+# In[43]:
 
 
 def split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2):
@@ -202,7 +211,7 @@ def split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2):
     return (X_train, X_val, X_test, y_train, y_val, y_test)
 
 
-# In[10]:
+# In[44]:
 
 
 def make_model(weights="imagenet", 
@@ -228,7 +237,7 @@ def make_model(weights="imagenet",
     return model
 
 
-# In[35]:
+# In[45]:
 
 
 def train_model(model, 
@@ -277,7 +286,7 @@ def train_model(model,
     return model, history
 
 
-# In[12]:
+# In[46]:
 
 
 def graph_model_performance(history):
@@ -304,7 +313,7 @@ def graph_model_performance(history):
     plt.clf()
 
 
-# In[13]:
+# In[47]:
 
 
 def print_images(x, name):
@@ -357,7 +366,7 @@ def evaluate_model(model, X_train, X_val, X_test, y_train, y_val, y_test, thresh
     evaluate_dataset(model, X_test, y_test, threshold=threshold, pictures=pictures, dataset_type="test")
 
 
-# In[33]:
+# In[48]:
 
 
 def Augment_data():
@@ -368,13 +377,19 @@ def Augment_data():
     return datagen
 
 
-# In[28]:
+# In[49]:
 
 
 X, y, bounds = load_data_from_h5()
 
 
-# In[29]:
+# In[ ]:
+
+
+
+
+
+# In[52]:
 
 
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y, train_percent=0.7, val_percent=0.1, test_percent=0.2)
@@ -386,13 +401,13 @@ X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y, train_percent=
 datagen = Augment_data()
 
 
-# In[31]:
+# In[53]:
 
 
 model = make_model()
 
 
-# In[36]:
+# In[54]:
 
 
 # model, history = train_model(model, X_train, y_train, X_val, y_val, "trial_4_epoch_35", epochs=35, save_history=True)
