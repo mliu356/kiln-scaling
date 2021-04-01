@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[17]:
 
 
 # !pip install pandas
@@ -29,7 +29,7 @@ import random
 import fnmatch
 
 
-# In[2]:
+# In[3]:
 
 
 from pydrive.auth import GoogleAuth
@@ -53,7 +53,7 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[4]:
+# In[20]:
 
 
 local_testing_mode = False
@@ -68,7 +68,7 @@ offset_px = 20
 offset_configs = [(0, 0)]
 percent_neg_to_keep = 0.005
 
-save_path = '/atlas/u/mliu356/data/kiln-scaling/india_tiles_from_small/'
+save_path = '/atlas/u/mliu356/data/kiln-scaling/bihar_tiles'
 # composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/composites/' # bangladesh, 2018-19
 composite_save_path = '/atlas/u/mliu356/data/kiln-scaling/india_small_composites/' # new bangladesh
 
@@ -83,7 +83,13 @@ all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10',
 print(kilns.head())
 
 
-# In[5]:
+# In[ ]:
+
+
+
+
+
+# In[21]:
 
 
 def mkdirs(names):
@@ -93,7 +99,7 @@ def mkdirs(names):
 mkdirs([save_path, composite_save_path])
 
 
-# In[57]:
+# In[22]:
 
 
 file_list = drive.ListFile({'q': "title contains '" + composite_file_name + "'"}).GetList()
@@ -103,7 +109,7 @@ for file in file_list[:5]:
   print('title: %s, id: %s' % (file['title'], file['id']))
 
 
-# In[7]:
+# In[23]:
 
 
 # calculate image grid
@@ -120,25 +126,24 @@ print("Number of image grid rows:", num_image_rows)
 
 
 coords = []
-with open("../data/countries.geojson", "r") as countries_geojson:
-    country_dict = json.load(countries_geojson)["features"]
-for obj in country_dict:
-    name = obj['properties']['ADMIN']
-    if name == "India":
+with open("../data/india_district.geojson", "r") as district_geojson:
+    dist_dict = json.load(district_geojson)["features"]
+for obj in dist_dict:
+    name = obj['properties']['NAME_1']
+    if name == "Bihar":
         coords = obj['geometry']["coordinates"]
 flat_coords = []
 for sublist in coords:
     for coord in sublist:
-        for c in coord:
-            flat_coords.append(c)
+        flat_coords.append(coord)
             
 flat_coords += [flat_coords[0]]
-bangladesh_geo = Polygon(flat_coords)
-# print(bangladesh_geo)
-# print(pretty_bounds(bangladesh_geo.bounds))
+bihar_geo = Polygon(flat_coords)
+# print(bihar_geo)
+print(pretty_bounds(bihar_geo.bounds))
 
 
-# In[9]:
+# In[25]:
 
 
 # optional pre-download all files
@@ -171,7 +176,7 @@ def get_tile_info_from_px(dataset, px_row, px_col, has_kiln):
     bounds = list(r_bounds(window, dataset.transform))
     tile_geo = Polygon([[bounds[0], bounds[2]], [bounds[0], bounds[3]], [bounds[1], bounds[3]], [bounds[1], bounds[2]], [bounds[0], bounds[2]]])
     
-    if has_kiln or bangladesh_geo.intersects(tile_geo):
+    if has_kiln or bihar_geo.intersects(tile_geo):
         return bands, bounds
     else:
         return None, None
@@ -185,7 +190,7 @@ def get_tile_has_kiln(dataset, px_row, px_col):
     return len(kilns_in_image) >= 1
 
 
-# In[11]:
+# In[27]:
 
 
 def save_current_file(save_index, counter):
@@ -211,10 +216,11 @@ def add_example(ex_data, ex_bounds, t_global_indices, save_index, counter, is_po
     return save_index, new_counter
 
 
-# In[12]:
+# In[28]:
 
 
 ## testing & visualization methods
+
 # image is a single example of shape (13, 64, 64)
 def visualize_tile(image, indices=[3, 2, 1]):
     row_idx = np.array(indices)
@@ -227,7 +233,7 @@ def pretty_bounds(bounds):
     return [[bounds[0], bounds[1]], [bounds[2], bounds[1]], [bounds[2], bounds[3]], [bounds[0], bounds[3]], [bounds[0], bounds[1]]]
 
 
-# In[53]:
+# In[29]:
 
 
 ## testing variables
@@ -245,13 +251,15 @@ examples = np.zeros([examples_per_save_file, len(all_bands), tile_height, tile_l
 labels = np.zeros([examples_per_save_file, 1])
 tile_indices = np.zeros([examples_per_save_file, 3]) # [row, col, offset_index]
 
+last_file_completed = None
+
 test_bounds = []
 test_ex = []
 test_labels = []
 test_indices = []
 
 
-# In[15]:
+# In[30]:
 
 
 # print(composite_file_path)
@@ -266,38 +274,45 @@ test_indices = []
 # print(bands2.shape)
 
 
-# In[60]:
+# In[31]:
 
 
 if local_testing_mode:
     file_list = file_list[10:]
 
 
-# In[61]:
+# In[ ]:
+
+
+
+
+
+# In[32]:
 
 
 std_tile_rows, std_tile_cols = None, None
     
 total_start_time = time.time()
 for index, file in enumerate(file_list):
-#     if (last_file_completed == None or file['title'] > last_file_completed):
-    file_start_time = time.time()
-    print("Starting file " + file['title'])
+    if (last_file_completed == None or file['title'] > last_file_completed):
+        file_start_time = time.time()
+        print("Starting file " + file['title'])
 
-    # get composite image indices
-    c_row = int(index / num_image_cols)
-    c_col = index % num_image_cols
+        # get composite image indices
+        c_row = int(index / num_image_cols)
+        c_col = index % num_image_cols
 
-    composite_file_path = composite_save_path + file['title']
-    if not path.exists(composite_file_path):
-        print("Downloading file...")
-        # download the file
-        download_file = drive.CreateFile({'id': file['id']})
-        file.GetContentFile(composite_file_path)
-        
-    with rasterio.open(composite_file_path) as dataset:
+        composite_file_path = composite_save_path + file['title']
+        if not path.exists(composite_file_path):
+            print("Downloading file...")
+            # download the file
+            download_file = drive.CreateFile({'id': file['id']})
+            file.GetContentFile(composite_file_path)
+        dataset = rasterio.open(composite_file_path)
         image_geo = Polygon(pretty_bounds(dataset.bounds))
-        if bangladesh_geo.intersects(image_geo):
+#         print("image bounds", pretty_bounds(dataset.bounds))
+    
+        if bihar_geo.intersects(image_geo):
             for offset_index, offset_config in enumerate(offset_configs):
                 num_rows = int((dataset.height - offset_config[0]) / tile_height)
                 num_cols = int((dataset.width - offset_config[1]) / tile_length)
@@ -331,14 +346,16 @@ for index, file in enumerate(file_list):
                             t_global_row = c_row * std_tile_rows + tile_idx_row
                             t_global_col = c_col * std_tile_cols + tile_idx_col
                             t_global_indices = [t_global_row, t_global_col, offset_index]
-
-    #                             print(".")
+                            
+#                             print(".")
 
                             save_index, counter = add_example(t_data, t_bounds, t_global_indices, save_index, counter, tile_has_kiln)
                             test_bounds += [t_bounds]
                             test_ex += [t_data]
                             test_labels += [tile_has_kiln]
                             test_indices += [t_global_indices]
+
+        last_file_completed = file['title']
     
     # handle leftovers in a final file
     if index == len(file_list) - 1:
