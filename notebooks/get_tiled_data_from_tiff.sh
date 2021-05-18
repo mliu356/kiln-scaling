@@ -24,7 +24,7 @@ echo NPROCS=$NPROCS
 echo $USER
 # can try the following to list out which GPU you have access to
 # python /sailhome/${USER}/scaling-kilns/kiln-scaling/notebooks/get_tiled_data_from_tiff_hdf5.py $USER
-python ./get_tiled_data_bihar_india.py $USER
+python ./get_tiled_data_from_tiff_hdf5.py $USER
 # python /sailhome/atlas/u/mliu356/scaling-kilns/kiln-scaling/notebooks/get_tiled_data_from_tiff_hdf5.py
 #srun /usr/local/cuda/samples/1_Utilities/deviceQuery/deviceQuery
 
