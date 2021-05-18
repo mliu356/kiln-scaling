@@ -28,7 +28,7 @@ from rasterio.windows import Window, bounds as r_bounds
 import random
 
 
-# In[38]:
+# In[3]:
 
 
 from pydrive.auth import GoogleAuth
@@ -52,10 +52,10 @@ gauth.SaveCredentialsFile("mycreds.txt")
 drive = GoogleDrive(gauth)
 
 
-# In[51]:
+# In[4]:
 
 
-local_testing_mode = False
+local_testing_mode = True
 
 # set params
 tile_height, tile_length = (64, 64)
@@ -82,7 +82,7 @@ all_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8A', 'B8', 'B9', 'B10',
 print(kilns.head())
 
 
-# In[40]:
+# In[5]:
 
 
 def mkdirs(names):
@@ -92,7 +92,7 @@ def mkdirs(names):
 mkdirs([save_path, composite_save_path])
 
 
-# In[41]:
+# In[6]:
 
 
 file_list = drive.ListFile({'q': "title contains '" + composite_file_name + "'"}).GetList()
@@ -102,7 +102,7 @@ for file in file_list[:5]:
   print('title: %s, id: %s' % (file['title'], file['id']))
 
 
-# In[43]:
+# In[7]:
 
 
 # calculate image grid
@@ -118,7 +118,7 @@ print("Number of image grid columns:", num_image_cols)
 print("Number of image grid rows:", num_image_rows)
 
 
-# In[46]:
+# In[14]:
 
 
 coords = []
@@ -126,7 +126,7 @@ with open("../data/countries.geojson", "r") as countries_geojson:
     country_dict = json.load(countries_geojson)["features"]
 for obj in country_dict:
     name = obj['properties']['ADMIN']
-    if name == "India":
+    if name == "Bangladesh":
         coords = obj['geometry']["coordinates"]
 flat_coords = []
 for sublist in coords:
@@ -139,7 +139,7 @@ bangladesh_geo = Polygon(flat_coords)
 # print(bangladesh_geo)
 
 
-# In[47]:
+# In[9]:
 
 
 # optional pre-download all files
@@ -158,7 +158,7 @@ if download_all_first:
     print("Done downloading all files.")
 
 
-# In[48]:
+# In[22]:
 
 
 def get_tile_info_from_px(dataset, px_row, px_col, has_kiln):
@@ -169,9 +169,14 @@ def get_tile_info_from_px(dataset, px_row, px_col, has_kiln):
     window = Window(px_col, px_row, tile_length, tile_height)
     bands = dataset.read(window=window)
     bounds = list(r_bounds(window, dataset.transform))
-    tile_geo = Polygon([[bounds[0], bounds[2]], [bounds[0], bounds[3]], [bounds[1], bounds[3]], [bounds[1], bounds[2]], [bounds[0], bounds[2]]])
+    tile_points = [[bounds[0], bounds[1]], [bounds[0], bounds[3]], [bounds[2], bounds[3]], [bounds[2], bounds[1]], [bounds[0], bounds[1]]]
     
-    if has_kiln or bangladesh_geo.intersects(tile_geo):
+    tile_in_country = False
+    for point in tile_points:
+        if bangladesh_geo.contains(Point(point)):
+            tile_in_country = True
+        
+    if has_kiln or tile_in_country:
         return bands, bounds
     else:
         return None, None
@@ -185,7 +190,7 @@ def get_tile_has_kiln(dataset, px_row, px_col):
     return len(kilns_in_image) >= 1
 
 
-# In[13]:
+# In[11]:
 
 
 def save_current_file(save_index, counter):
@@ -211,7 +216,7 @@ def add_example(ex_data, ex_bounds, t_global_indices, save_index, counter, is_po
     return save_index, new_counter
 
 
-# In[14]:
+# In[12]:
 
 
 ## testing & visualization methods
@@ -228,7 +233,7 @@ def pretty_bounds(bounds):
     return [[bounds[0], bounds[1]], [bounds[2], bounds[1]], [bounds[2], bounds[3]], [bounds[0], bounds[3]], [bounds[0], bounds[1]]]
 
 
-# In[15]:
+# In[13]:
 
 
 ## testing variables
@@ -262,11 +267,11 @@ tile_indices = np.zeros([examples_per_save_file, 3]) # [row, col, offset_index]
 # print(bands2.shape)
 
 
-# In[50]:
+# In[21]:
 
 
-if local_testing_mode:
-    file_list = file_list[:1]
+# if local_testing_mode:
+#     file_list = file_list[:1]
 
 std_tile_rows, std_tile_cols = None, None
     
@@ -281,6 +286,7 @@ for index, file in enumerate(file_list):
     
     composite_file_path = composite_save_path + file['title']
     if not path.exists(composite_file_path):
+        print("path does not exist:", composite_file_path)
         print("Downloading file...")
         # download the file
         download_file = drive.CreateFile({'id': file['id']})
