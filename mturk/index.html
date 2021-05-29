@@ -1,0 +1,133 @@
+<script src="https://s3.amazonaws.com/MTurks/jquery-1.11.2.min.js"></script>
+<script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+
+<style>
+    body {
+		margin: 50px;
+		font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+		font-size: 14pt;
+	}
+
+	#image_labeling {
+	    padding-top: 30px;
+	    display: flex;
+	    flex-direction: column;
+	    align-items: center;
+	}
+
+    #label_image {
+        padding-top: 10px;
+        width:260px;
+    }
+
+    button {
+        margin: 20px;
+        width:100px;
+		height:30px;
+		font-size:20px;
+		border-radius: 10px;
+		border: 1px solid;
+    }
+
+    button:hover {
+		background-color: #CCC;
+	}
+
+	#post_labeling {
+	    display: flex;
+	    flex-direction: column;
+	    align-items: center;
+	    padding-top: 30px;
+	}
+
+	#done {
+	    display: flex;
+	    flex-direction: column;
+	    align-items: center;
+	}
+
+</style>
+
+<script type="text/javascript">
+
+var p = {};
+
+function start() {
+
+    // initialize data
+    p.num_images = 20; // 20;
+    p.curr_im = 0;
+    p.image_paths = []
+    for (i = 0; i < p.num_images; i++) {
+        p.image_paths.push("${image_url" + i + "}")
+    }
+
+    // generate hidden inputs to record selections
+    var form = document.getElementsByTagName('crowd-form')[0]
+    selection_div = document.createElement('div');
+    selection_div.id = 'selection_div';
+    for (i = 0; i < p.num_images; i++) {
+        hidden_input = document.createElement('crowd-input')
+        hidden_input.name = 'selection' + i;
+        hidden_input.id = 'selection' + i;
+        hidden_input.style = 'display:none'
+        selection_div.appendChild(hidden_input);
+    }
+    form.appendChild(selection_div);
+
+    // setup first image
+    $('#trial_number').html('Trial 1 of ' + p.num_images);
+    var image = document.getElementById('label_image');
+    image.src = p.image_paths[0]
+    // image.src = "https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg";
+    $('#image_labeling').show();
+}
+
+function next(answer) {
+    // save current answer
+    $("#selection"+(p.curr_im)).val(answer);
+    p.curr_im = p.curr_im + 1
+
+    if (p.curr_im != p.num_images) {
+        // if not done yet, set up next image
+        $('#trial_number').html('Trial ' + (p.curr_im + 1) + ' of ' + p.num_images)
+        var image = document.getElementById('label_image');
+        image.src = p.image_paths[p.im_num]
+    } else {
+        // if done, show conclusion message + submit
+        $('#image_labeling').hide();
+        $('#post_labeling').show();
+    }
+}
+
+function submit_form() {
+    post_labeling = document.getElementById('post_labeling');
+    post_labeling.innerHTML = "Thank you for your participation!";
+}
+
+$(document).ready(start);
+
+</script>
+
+<body>
+    <crowd-form onSubmit='submit_form()'>
+        <div id="tutorial" style="display:none">
+            Tutorial Flow
+        </div>
+
+        <div id="image_labeling" style="display:none">
+            <div id="trial_number">Trial #</div>
+            <img id="label_image"/>
+            <div id="button_group">
+                <button id="kiln_button" type="button" onClick="next(1)">Kiln</button>
+                <button id="no_kiln_button" type="button" onClick="next(0)">No Kiln</button>
+            </div>
+        </div>
+
+        <div id="post_labeling" style="display:none">
+            Please submit your answers by pressing the submit button below.
+            <button id='submit_button'>Submit</button>
+        </div>
+    </crowd-form>
+
+</body>
