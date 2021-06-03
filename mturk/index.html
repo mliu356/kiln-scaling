@@ -9,15 +9,29 @@
 	}
 
 	#image_labeling {
-	    padding-top: 30px;
+	    padding-top: 20px;
 	    display: flex;
 	    flex-direction: column;
 	    align-items: center;
 	}
 
     #label_image {
-        padding-top: 10px;
-        width:260px;
+        padding-top: 20px;
+        width:180px;
+    }
+
+    #maps_text {
+        padding-top: 20px;
+        font-size: 12pt;
+        max-width: 800px;
+        overflow-wrap: break-word;
+    }
+
+    #maps_link {
+        padding-top: 20px;
+        font-size: 16pt;
+        max-width:800px;
+        overflow-wrap: break-word;
     }
 
     button {
@@ -57,10 +71,29 @@ function start() {
     // initialize data
     p.num_images = 20; // 20;
     p.curr_im = 0;
-    p.image_paths = []
-    for (i = 0; i < p.num_images; i++) {
-        p.image_paths.push("${image_url" + i + "}")
-    }
+
+    p.image_data = [
+        ["${image_url0}", "${image_coord0_x1}", "${image_coord0_x2}", "${image_coord0_y1}", "${image_coord0_y2}"],
+        ["${image_url1}", "${image_coord1_x1}", "${image_coord1_x2}", "${image_coord1_y1}", "${image_coord1_y2}"],
+        ["${image_url2}", "${image_coord2_x1}", "${image_coord2_x2}", "${image_coord2_y1}", "${image_coord2_y2}"],
+        ["${image_url3}", "${image_coord3_x1}", "${image_coord3_x2}", "${image_coord3_y1}", "${image_coord3_y2}"],
+        ["${image_url4}", "${image_coord4_x1}", "${image_coord4_x2}", "${image_coord4_y1}", "${image_coord4_y2}"],
+        ["${image_url5}", "${image_coord5_x1}", "${image_coord5_x2}", "${image_coord5_y1}", "${image_coord5_y2}"],
+        ["${image_url6}", "${image_coord6_x1}", "${image_coord6_x2}", "${image_coord6_y1}", "${image_coord6_y2}"],
+        ["${image_url7}", "${image_coord7_x1}", "${image_coord7_x2}", "${image_coord7_y1}", "${image_coord7_y2}"],
+        ["${image_url8}", "${image_coord8_x1}", "${image_coord8_x2}", "${image_coord8_y1}", "${image_coord8_y2}"],
+        ["${image_url9}", "${image_coord9_x1}", "${image_coord9_x2}", "${image_coord9_y1}", "${image_coord9_y2}"],
+        ["${image_url10}", "${image_coord10_x1}", "${image_coord10_x2}", "${image_coord10_y1}", "${image_coord10_y2}"],
+        ["${image_url11}", "${image_coord11_x1}", "${image_coord11_x2}", "${image_coord11_y1}", "${image_coord11_y2}"],
+        ["${image_url12}", "${image_coord12_x1}", "${image_coord12_x2}", "${image_coord12_y1}", "${image_coord12_y2}"],
+        ["${image_url13}", "${image_coord13_x1}", "${image_coord13_x2}", "${image_coord13_y1}", "${image_coord13_y2}"],
+        ["${image_url14}", "${image_coord14_x1}", "${image_coord14_x2}", "${image_coord14_y1}", "${image_coord14_y2}"],
+        ["${image_url15}", "${image_coord15_x1}", "${image_coord15_x2}", "${image_coord15_y1}", "${image_coord15_y2}"],
+        ["${image_url16}", "${image_coord16_x1}", "${image_coord16_x2}", "${image_coord16_y1}", "${image_coord16_y2}"],
+        ["${image_url17}", "${image_coord17_x1}", "${image_coord17_x2}", "${image_coord17_y1}", "${image_coord17_y2}"],
+        ["${image_url18}", "${image_coord18_x1}", "${image_coord18_x2}", "${image_coord18_y1}", "${image_coord18_y2}"],
+        ["${image_url19}", "${image_coord19_x1}", "${image_coord19_x2}", "${image_coord19_y1}", "${image_coord19_y2}"]
+    ]
 
     // generate hidden inputs to record selections
     var form = document.getElementsByTagName('crowd-form')[0]
@@ -78,8 +111,14 @@ function start() {
     // setup first image
     $('#trial_number').html('Trial 1 of ' + p.num_images);
     var image = document.getElementById('label_image');
-    image.src = p.image_paths[0]
-    // image.src = "https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg";
+    image.src = p.image_data[0][0]
+    var image_url_text = document.getElementById('image_url_text')
+    image_url_text.innerHTML = p.image_data[0][0]
+
+    var maps_link = document.getElementById('maps_link');
+    maps_link_url = "https://www.google.com/maps/dir/" + p.image_data[0][1] + "," + p.image_data[0][3] + "/" + p.image_data[0][2] + "," + p.image_data[0][4] + "//@" + p.image_data[0][1] + "," + p.image_data[0][3] + ",3420m/data=!3m1!1e3"
+    maps_link.innerHTML = "<ExternalURL>" + maps_link_url + "</ExternalURL>"
+
     $('#image_labeling').show();
 }
 
@@ -92,7 +131,11 @@ function next(answer) {
         // if not done yet, set up next image
         $('#trial_number').html('Trial ' + (p.curr_im + 1) + ' of ' + p.num_images)
         var image = document.getElementById('label_image');
-        image.src = p.image_paths[p.im_num]
+        image.src = p.image_data[p.curr_im][0]
+        var image_url_text = document.getElementById('image_url_text')
+        image_url_text.innerHTML = p.image_data[p.curr_im][0]
+        var maps_link = document.getElementById('maps_link');
+        maps_link.innerHTML = "https://www.google.com/maps/dir/" + p.image_data[p.curr_im][1] + "," + p.image_data[p.curr_im][3] + "/" + p.image_data[p.curr_im][2] + "," + p.image_data[p.curr_im][4] + "//@" + p.image_data[p.curr_im][1] + "," + p.image_data[p.curr_im][3] + ",3420m/data=!3m1!1e3"
     } else {
         // if done, show conclusion message + submit
         $('#image_labeling').hide();
@@ -117,7 +160,10 @@ $(document).ready(start);
 
         <div id="image_labeling" style="display:none">
             <div id="trial_number">Trial #</div>
+            <div id="image_url_text" style="display:none">Image Url Text</div>
             <img id="label_image"/>
+            <div id="maps_text">Open the following link to view the Google Maps satellite view of the same location. Remember, this should serve as a reference, but the final label should be based on the displayed image, not the Google Maps view.</div>
+            <div id="maps_link">Google Maps link</div>
             <div id="button_group">
                 <button id="kiln_button" type="button" onClick="next(1)">Kiln</button>
                 <button id="no_kiln_button" type="button" onClick="next(0)">No Kiln</button>
