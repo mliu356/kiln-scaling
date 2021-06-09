@@ -8,6 +8,11 @@
 		font-size: 14pt;
 	}
 
+  #tutorial {
+    margin: auto;
+    width: 900px;
+  }
+
 	#image_labeling {
 	    padding-top: 20px;
 	    display: flex;
@@ -35,12 +40,17 @@
     }
 
     button {
-        margin: 20px;
-        width:100px;
-		height:30px;
-		font-size:20px;
-		border-radius: 10px;
-		border: 1px solid;
+      margin: 20px;
+      width:100px;
+      height:30px;
+      font-size:20px;
+      border-radius: 10px;
+      border: 1px solid;
+    }
+
+    img {
+      margin-right: 5px;
+      margin-left: 5px;
     }
 
     button:hover {
@@ -66,7 +76,15 @@
 
 var p = {};
 
-function start() {
+function startExperiment() {
+  if(p.is_practice) {
+    startTutorial();
+  } else {
+    startTest();
+  }
+}
+
+function startTest() {
 
     // initialize data
     p.num_images = 20; // 20;
@@ -122,7 +140,73 @@ function start() {
     $('#image_labeling').show();
 }
 
-function next(answer) {
+function startTutorial() {
+
+    $('#tutorial').hide();
+    $('#image_labeling').show();
+
+    // initialize data
+    p.num_images = 10; // 20;
+    p.curr_im = 0;
+    p.totalCorrect = 0;
+
+    p.image_data = [
+        ["{image_url0}", "{image_coord0_x1}", "{image_coord0_x2}", "{image_coord0_y1}", "{image_coord0_y2}"],
+        ["{image_url1}", "{image_coord1_x1}", "{image_coord1_x2}", "{image_coord1_y1}", "{image_coord1_y2}"],
+        ["{image_url2}", "{image_coord2_x1}", "{image_coord2_x2}", "{image_coord2_y1}", "{image_coord2_y2}"],
+        ["{image_url3}", "{image_coord3_x1}", "{image_coord3_x2}", "{image_coord3_y1}", "{image_coord3_y2}"],
+        ["{image_url4}", "{image_coord4_x1}", "{image_coord4_x2}", "{image_coord4_y1}", "{image_coord4_y2}"],
+        ["{image_url5}", "{image_coord5_x1}", "{image_coord5_x2}", "{image_coord5_y1}", "{image_coord5_y2}"],
+        ["{image_url6}", "{image_coord6_x1}", "{image_coord6_x2}", "{image_coord6_y1}", "{image_coord6_y2}"],
+        ["{image_url7}", "{image_coord7_x1}", "{image_coord7_x2}", "{image_coord7_y1}", "{image_coord7_y2}"],
+        ["{image_url8}", "{image_coord8_x1}", "{image_coord8_x2}", "{image_coord8_y1}", "{image_coord8_y2}"],
+        ["{image_url9}", "{image_coord9_x1}", "{image_coord9_x2}", "{image_coord9_y1}", "{image_coord9_y2}"],
+    ]
+
+    p.correct_answers = [0, 1, 1, 0, 1, 1, 1, 1, 1, 0];
+    p.if_wrong_end = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    // every image correct and incorrect feedback
+    p.feedback = [
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+        ["you missed this kiln because it is hidden try looking harder", "you did amazing good job noticing x"],
+    ]
+
+    // generate hidden inputs to record selections
+    var form = document.getElementsByTagName('crowd-form')[0]
+    selection_div = document.createElement('div');
+    selection_div.id = 'selection_div';
+    for (i = 0; i < p.num_images; i++) {
+        hidden_input = document.createElement('crowd-input')
+        hidden_input.name = 'selection' + i;
+        hidden_input.id = 'selection' + i;
+        hidden_input.style = 'display:none'
+        selection_div.appendChild(hidden_input);
+    }
+    form.appendChild(selection_div);
+
+    // setup first image
+    $('#trial_number').html('Tutorial Trial 1 of ' + p.num_images);
+    var image = document.getElementById('label_image');
+    image.src = p.image_data[0][0]
+    var image_url_text = document.getElementById('image_url_text')
+    image_url_text.innerHTML = p.image_data[0][0]
+
+    var maps_link = document.getElementById('maps_link');
+    maps_link_url = "https://www.google.com/maps/dir/" + p.image_data[0][1] + "," + p.image_data[0][3] + "/" + p.image_data[0][2] + "," + p.image_data[0][4] + "//@" + p.image_data[0][1] + "," + p.image_data[0][3] + ",3420m/data=!3m1!1e3"
+    maps_link.innerHTML = "<ExternalURL>" + maps_link_url + "</ExternalURL>"
+    $('#tutorial').hide();
+    $('#image_labeling').show();
+}
+
+function nextTest(answer) {
     // save current answer
     $("#selection"+(p.curr_im)).val(answer);
     p.curr_im = p.curr_im + 1
@@ -143,6 +227,51 @@ function next(answer) {
     }
 }
 
+function nextTutorial(answer) {
+    const isCorrect = answer === p.correct_answers[p.curr_im] | 0;
+    p.totalCorrect += isCorrect;
+    alert(p.feedback[p.curr_im][isCorrect]);
+
+    // end tutorial if they fail the easy ones
+    if (p.if_wrong_end[p.curr_im] && !isCorrect) {
+      alert("You have failed the tutorial!");
+      $('#image_labeling').hide();
+    }
+    p.curr_im = p.curr_im + 1;
+    if (p.curr_im != p.num_images) {
+        $('#trial_number').html('Tutorial Trial ' + (p.curr_im + 1) + ' of ' + p.num_images)
+        var image = document.getElementById('label_image');
+        image.src = p.image_data[p.curr_im][0]
+        var image_url_text = document.getElementById('image_url_text')
+        image_url_text.innerHTML = p.image_data[p.curr_im][0]
+        var maps_link = document.getElementById('maps_link');
+        maps_link.innerHTML = "https://www.google.com/maps/dir/" + p.image_data[p.curr_im][1] + "," + p.image_data[p.curr_im][3] + "/" + p.image_data[p.curr_im][2] + "," + p.image_data[p.curr_im][4] + "//@" + p.image_data[p.curr_im][1] + "," + p.image_data[p.curr_im][3] + ",3420m/data=!3m1!1e3"
+    } else {
+        // start actual test
+        if (p.totalCorrect === 10) {
+          alert("Done with the tutorial!");
+          p.is_practice = false;
+          startExperiment();
+        } else {
+          alert("You have failed the tutorial! You needed " + p.num_images + "/" + p.num_images + " correct and got " + p.totalCorrect + " / " + p.num_images + " correct.");
+          $('#image_labeling').show();
+        }
+    }
+}
+
+function next(answer) {
+    if(p.is_practice) {
+        nextTutorial(answer);
+    } else {
+        nextTest(answer);
+    }
+}
+
+function start() {
+    p.is_practice = true;
+    $('#tutorial').show();
+}
+
 function submit_form() {
     post_labeling = document.getElementById('post_labeling');
     post_labeling.innerHTML = "Thank you for your participation!";
@@ -153,27 +282,93 @@ $(document).ready(start);
 </script>
 
 <body>
-    <crowd-form onSubmit='submit_form()'>
-        <div id="tutorial" style="display:none">
-            Tutorial Flow
-        </div>
+  <crowd-form onSubmit='submit_form()'>
+    <div id="tutorial" style="display:none;">
+      <div id="long_info" style="width:100%">
+        <b>About this HIT:</b><br><br>
+        <ul>
+          <li><b>Please only participate in this HIT if you have normal color vision.</b></li><br>
 
-        <div id="image_labeling" style="display:none">
-            <div id="trial_number">Trial #</div>
-            <div id="image_url_text" style="display:none">Image Url Text</div>
-            <img id="label_image"/>
-            <div id="maps_text">Open the following link to view the Google Maps satellite view of the same location. Imagine a box with the two map pins as the top right and bottom left corners. This is corresponding area to the displayed image. Remember, this should serve as a reference, but <b>the final label should be based on the displayed image</b>, not the Google Maps view.</div>
-            <div id="maps_link">Google Maps link</div>
-            <div id="button_group">
-                <button id="kiln_button" type="button" onClick="next(1)">Kiln</button>
-                <button id="no_kiln_button" type="button" onClick="next(0)">No Kiln</button>
+          <li>It should take about 2 minutes.</li><br>
+
+          <li>You will take part in an object identification task.
+            You will see a series of satellite images and your task is to confirm whether or not each image contains a
+            brick kiln.
+            A brick kiln is a small, simple factory where bricks are made.
+            The kiln is either an oval or a rectangle and will be red in color because they are made out of red bricks.
+            Surrounding the kiln you will see rows of bricks drying, however these bricks will not be red in color
+            because they have not yet been fired in the kiln.
+          </li> <br>
+
+          <li>An image should only be tagged as "kiln" if at least some portion of the red, kiln structure is in the
+            image.
+            If you only see bricks, then you should tag this "no kiln".
+            Here are some examples:<br><br>
+            <div align="center" style="display:flex;  flex-direction: row;">
+
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
+
+
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
+              <img src="https://kiln-labeling.s3.us-east-2.amazonaws.com/examples_1/0.jpeg" />
             </div>
-        </div>
 
-        <div id="post_labeling" style="display:none">
-            Please submit your answers by pressing the submit button below.
-            <button id='submit_button'>Submit</button>
+          </li>
+          <li>
+            Sometimes the quality of the satellite image will be very bad and it will be hard to tell whether or not
+            there
+            is a kiln.
+            To help you check whether a kiln is present in the image, there is a link to the same location on Google
+            Maps
+            where the satellite layer will be displayed.
+            Checking the <b>Google Maps link</b> can help you decide.
+            It's important to be very careful when you check the Google Maps link because the images for the task are
+            older
+            than what you will see on Google Maps. Here are some examples of images side-by-side with the Google Maps
+            image.
+            In these cases, because it looks like there is a kiln in the satellite image and in Google Maps you can see
+            that
+            there used to be a kiln in this location, these should all be tagged as "kiln".
+          </li>
+        </ul>
+      </div>
+
+      <div id="buttons_start" align="center">
+        <button id="start_button" type="button" onclick="startExperiment()">Start!</button>
+
+        <div id="not_assigned" align="left" style="display:none" "="">
+                            <p>Please accept the HIT to begin!</p>
         </div>
-    </crowd-form>
+      </div>
+    </div>
+
+    <div id="image_labeling" style="display:none;">
+      <div id="trial_number">Trial #</div>
+      <div id="image_url_text" style="display:none">Image Url Text</div>
+      <img id="label_image" />
+      <div id="maps_text">Open the following link to view the Google Maps satellite view of the same location.
+        Imagine
+        a box with the two map pins as the top right and bottom left corners. This is corresponding area to the
+        displayed image. Remember, this should serve as a reference, but <b>the final label should be based on the
+          displayed image</b>, not the Google Maps view.</div>
+      <div id="maps_link">Google Maps link</div>
+      <div id="button_group">
+        <button id="kiln_button" type="button" onClick="next(1)">Kiln</button>
+        <button id="no_kiln_button" type="button" onClick="next(0)">No Kiln</button>
+      </div>
+    </div>
+
+    <div id="post_labeling" style="display:none;">
+      Please submit your answers by pressing the submit button below.
+      <button id='submit_button'>Submit</button>
+    </div>
+  </crowd-form>
 
 </body>
